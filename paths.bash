@@ -28,7 +28,7 @@ _key_completions() {
     local path_db
     . "$_PATH_DB_FILE"
 
-	# get the currently completing word
+    # get the currently completing word
     local partial_key=${COMP_WORDS[COMP_CWORD]}
 
     # change IFS so that the completions can contain spaces
