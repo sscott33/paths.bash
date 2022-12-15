@@ -57,6 +57,21 @@ complete -F _key_completions gp
 complete -F _key_completions dp
 complete -F _key_completions pp
 
+# sp positional completion
+_sp_completion() {
+    case $COMP_CWORD in
+        1)
+            # complete directory names
+            COMPREPLY=($(compgen -o dirnames -- "${COMP_WORDS[COMP_CWORD]}"))
+            ;;
+        2)
+            # offer existing bookmarks as options for the case of reassigning a bookmark
+            _key_completions
+            ;;
+    esac
+}
+complete -F _sp_completion sp
+
 # init path database if it does not exist
 if [[ ! -e "$_PATH_DB_FILE" ]]; then
     declare -A path_db
