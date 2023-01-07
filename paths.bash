@@ -109,7 +109,7 @@ sp () {
     if [[ -d "$path" ]]; then
         path_db["$bookmark_name"]="$path"
     else
-        echo "'$path' does not exist or is not a directory"
+        echo "Error: '$path' does not exist or is not a directory"
         return 1
     fi
 
@@ -141,7 +141,17 @@ gp () {
             ;;
     esac
 
-    cd "$path" && echo "working directory is now '$path'"
+    if [[ -n "$path" ]]; then
+        if [[ -d "$path" ]]; then
+            # attempt to cd to the path; cd rarely returns a failure exit code, so print pwd just to be safe
+            cd "$path" && echo "working directory is now '$(pwd)'"
+        else
+            echo "Error: '$path' does not exist or is not a directory"
+        fi
+    else
+        echo "Error: '$1' is not a path bookmark"
+        return 1
+    fi
 }
 
 # delete path
