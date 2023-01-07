@@ -195,8 +195,11 @@ pp () {
                 echo "$key : ${path_db["$key"]}"
             done | sort
             ;;
-        1) # print the requested bookmark
-            echo "${path_db["$1"]}"
+        *) # print the requested bookmark(s); newline separated
+            while [[ -n "$1" ]]; do
+                echo "${path_db["$1"]}"
+                shift
+            done
             ;;
     esac
 }

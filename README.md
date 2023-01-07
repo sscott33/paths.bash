@@ -32,9 +32,9 @@ This function changes the working directory to a bookmarked path. It accepts 0â€
 
 ### pp
 
-> $> pp \<bookmark_name\>
+> $> pp \[\<bookmark_name\> ...\]
 
-This function accepts 0â€“1 arguments. If given one argument, it prints out the given bookmark and its associated path. If no bookmark is given (zero arguments), then it will print out all bookmarks and their associated paths.
+This function accepts any number of arguments. If given a non-zero number of arguments, it prints out the given bookmarks and their associated paths. If no bookmark is given (zero arguments), then it will print out all bookmarks and their associated paths.
 
 ### dp
 
