@@ -181,6 +181,9 @@ pp () {
     local path_db
     . "$_PATH_DB_FILE"
 
+    local key
+    local path
+
     case $# in
         0) # print all bookmarks
             # print the default bookmark
@@ -195,11 +198,23 @@ pp () {
                 echo "$key : ${path_db["$key"]}"
             done | sort
             ;;
+        1)
+            # print single bookmark without name -> useful for $(pp <bookmark>)
+            path="${path_db["$1"]}"
+            [[ -n "$path" ]] && echo "$path"
+            ;;
         *) # print the requested bookmark(s); newline separated
             while [[ -n "$1" ]]; do
-                echo "${path_db["$1"]}"
+                path="${path_db["$1"]}"
+                if [[ -z "$path" ]]; then
+                    for key in "${!path_db[@]}"; do
+                        [[ "$key" =~ $1 ]] && echo "$key : ${path_db["$key"]}"
+                    done
+                else
+                    echo "$1 : $path"
+                fi
                 shift
-            done
+            done | sort
             ;;
     esac
 }
