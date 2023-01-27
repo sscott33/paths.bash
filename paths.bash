@@ -198,11 +198,11 @@ pp () {
                 echo "$key : ${path_db["$key"]}"
             done | sort
             ;;
-        1)
-            # print single bookmark without name -> useful for $(pp <bookmark>)
-            path="${path_db["$1"]}"
-            [[ -n "$path" ]] && echo "$path"
-            ;;
+        #1)
+        #    # print single bookmark without name -> useful for $(pp <bookmark>)
+        #    path="${path_db["$1"]}"
+        #    [[ -n "$path" ]] && echo "$path"
+        #    ;;
         *) # print the requested bookmark(s); newline separated
             while [[ -n "$1" ]]; do
                 path="${path_db["$1"]}"
