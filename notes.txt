@@ -1,0 +1,8 @@
+Need to rename default bookmark so that it doesn't show up in any searches or calls unless directly named
+    -> probably use something like "_default"
+    -> should store this in a variable in case it needs to be changed due to user preference or edge case
+    ** in pp: probably delete this from the loaded dict before doing regex lookup
+    ** if renamed, that name should be printed with argumentless pp to ensure user can utilize it if desired
+
+Need to migrate from echo to printf for printing of any strings starting with variables
+    ** need to avoid edge cases where there are funky characters in something like a bookmark name (specifically '-e' and '-n')

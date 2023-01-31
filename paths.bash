@@ -183,6 +183,8 @@ pp () {
 
     local key
     local path
+    local starting_argument_count=$#
+        # must store this because this variable will decrease with every "shift" call
 
     case $# in
         0) # print all bookmarks
@@ -198,20 +200,19 @@ pp () {
                 echo "$key : ${path_db["$key"]}"
             done | sort
             ;;
-        #1)
-        #    # print single bookmark without name -> useful for $(pp <bookmark>)
-        #    path="${path_db["$1"]}"
-        #    [[ -n "$path" ]] && echo "$path"
-        #    ;;
         *) # print the requested bookmark(s); newline separated
+
             while [[ -n "$1" ]]; do
                 path="${path_db["$1"]}"
                 if [[ -z "$path" ]]; then
                     for key in "${!path_db[@]}"; do
-                        [[ "$key" =~ $1 ]] && echo "$key : ${path_db["$key"]}"
+                        [[ "$key" =~ $1 ]] && printf "%s\n" "$key : ${path_db["$key"]}"
                     done
+                elif [[ $starting_argument_count -eq 1 ]]; then
+                    # if there is only one bookmark and it's exactly named, print path without name -> useful for $(pp <bookmark>)
+                    printf "%s\n" "$path"
                 else
-                    echo "$1 : $path"
+                    printf "%s\n" "$1 : $path"
                 fi
                 shift
             done | sort
