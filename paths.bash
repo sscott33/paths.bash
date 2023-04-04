@@ -20,13 +20,20 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-export _PATH_DB_FILE="$HOME/.path_db.bash"
-# stored dictionary is path_db
+export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
+    # stored dictionary is path_db
+export _PATHS_DEFAULT_BM_NAME=_default
+
+# allow for renaming the functions in case of collision; note that "complete" commands will need to be updated with new aliases
+alias gp=_PATHS_GP
+alias sp=_PATHS_SP
+alias dp=_PATHS_DP
+alias pp=_PATHS_PP
 
 _key_completions() {
     # completion words come from the keys of the associative array stored in the file below
     local path_db
-    . "$_PATH_DB_FILE"
+    . "$_PATHS_PATH_DB_FILE"
 
     # get the currently completing word
     local partial_key=${COMP_WORDS[COMP_CWORD]}
@@ -73,28 +80,28 @@ _sp_completion() {
 complete -F _sp_completion sp
 
 # init path database if it does not exist
-if [[ ! -e "$_PATH_DB_FILE" ]]; then
+if [[ ! -e "$_PATHS_PATH_DB_FILE" ]]; then
     declare -A path_db
-    path_db[default]="$HOME"
-    declare -p path_db  > "$_PATH_DB_FILE"
+    path_db[$_PATHS_DEFAULT_BM_NAME]="$HOME"
+    declare -p path_db  > "$_PATHS_PATH_DB_FILE"
     unset path_db
 fi
 
 # save path
-sp () {
+_PATHS_SP () {
     local path_db
     # source database
-    . "$_PATH_DB_FILE"
+    . "$_PATHS_PATH_DB_FILE"
     local path
     local bookmark_name
     case $# in
         0) # work with pwd
             path="$(realpath "$(pwd)")"
-            bookmark_name=default
+            bookmark_name="$_PATHS_DEFAULT_BM_NAME"
             ;;
         1) # work with given directory
             path="$(realpath "$1")"
-            bookmark_name=default
+            bookmark_name="$_PATHS_DEFAULT_BM_NAME"
             ;;
         2) # named given directory
             path="$(realpath "$1")"
@@ -113,24 +120,24 @@ sp () {
         return 1
     fi
 
-    if [[ "$bookmark_name" != default ]]; then
+    if [[ "$bookmark_name" != "$_PATHS_DEFAULT_BM_NAME" ]]; then
         echo "saved path '$path' as '$bookmark_name'"
     else
         echo "saved path '$path'"
     fi
     # save database
-    declare -p path_db > "$_PATH_DB_FILE"
+    declare -p path_db > "$_PATHS_PATH_DB_FILE"
 }
 
 #goto path
-gp () {
+_PATHS_GP () {
     local path_db
     # source database
-    . "$_PATH_DB_FILE"
+    . "$_PATHS_PATH_DB_FILE"
     local path
     case $# in
         0) # work with default
-            path="${path_db[default]}"
+            path="${path_db[$_PATHS_DEFAULT_BM_NAME]}"
             ;;
         1) # work with named directory
             path="${path_db["$1"]}"
@@ -155,10 +162,10 @@ gp () {
 }
 
 # delete path
-dp () {
+_PATHS_DP () {
     local path_db
     # source database
-    . "$_PATH_DB_FILE"
+    . "$_PATHS_PATH_DB_FILE"
     case $# in
         0) # print usage
             echo "HELP: use this function to delete one or more path references by specifying their names; view path references with pp"
@@ -166,20 +173,20 @@ dp () {
             ;;
         *) # delete one or more named paths
             while [[ -n "$1" ]]; do
-                [[ "$1" == "default" ]] && echo cannot delete default entry && shift && continue
+                [[ "$1" == "$_PATHS_DEFAULT_BM_NAME" ]] && echo "Error: refusing delete default entry: '$_PATHS_DEFAULT_BM_NAME'" && shift && continue
                 unset path_db["$1"] && echo "deleted reference to '$1'"
                 shift
             done
             ;;
     esac
     # save database
-    declare -p path_db > "${_PATH_DB_FILE}"
+    declare -p path_db > "${_PATHS_PATH_DB_FILE}"
 }
 
 # print paths
-pp () {
+_PATHS_PP () {
     local path_db
-    . "$_PATH_DB_FILE"
+    . "$_PATHS_PATH_DB_FILE"
 
     local key
     local path
@@ -189,15 +196,15 @@ pp () {
     case $# in
         0) # print all bookmarks
             # print the default bookmark
-            echo "default : ${path_db[default]}"
-            unset path_db[default]
+            echo "$_PATHS_DEFAULT_BM_NAME (default) : ${path_db[$_PATHS_DEFAULT_BM_NAME]}"
+            unset path_db[$_PATHS_DEFAULT_BM_NAME]
 
             # separate default and regular bookmarks with a blank line
             [[ ${#path_db[@]} -gt 0 ]] && echo
 
             # print the other bookmarks
             for key in "${!path_db[@]}"; do
-                echo "$key : ${path_db["$key"]}"
+                printf "%s\n" "$key : ${path_db["$key"]}"
             done | sort
             ;;
         *) # print the requested bookmark(s); newline separated
@@ -205,6 +212,7 @@ pp () {
             while [[ -n "$1" ]]; do
                 path="${path_db["$1"]}"
                 if [[ -z "$path" ]]; then
+                    unset path_db[$_PATHS_DEFAULT_BM_NAME]
                     for key in "${!path_db[@]}"; do
                         [[ "$key" =~ $1 ]] && printf "%s\n" "$key : ${path_db["$key"]}"
                     done

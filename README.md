@@ -4,7 +4,7 @@ paths.bash is a Bash file containing several functions that work in conjunction 
 
 ## How to install
 
-Clone this repo or directly download paths.bash and add a source of the file to your .bashrc file. **Important note:** using paths.bash will create and continually overwrite a file in your user's home directory called ".path_db.bash". You can change this by editing the filename provided to the export command at the beginning of the file.
+Clone this repo or directly download paths.bash and add a source of the file to your .bashrc or an equivalent config file. **Important note:** using paths.bash will create and continually overwrite a file in your user's home directory called ".path_db.bash". If you want to change this before your first use, please see the *Advanced configuration* section of this README.
 
 ## Usage
 
@@ -13,10 +13,6 @@ The following are the Bash functions you use to interact with the bookmarking sy
 * gp — goto path
 * pp — print path(s)
 * dp — delete path(s)
-
-### The default bookmark
-
-The default bookmark can be changed, but never deleted. The idea behind it is to store a temporary bookmark that can be easily used at a later time or in another instance of your shell. Since bookmarked paths are stored live into .path_db.bash, you can immediately access the default bookmark (and any other existing bookmarks) in another shell/terminal. This is useful if you want another terminal open to the same directory and need to navigate to the same path. Using the default bookmark will be explained in the subsections for sp and gp.
 
 ### sp
 
@@ -34,7 +30,7 @@ This function changes the working directory to a bookmarked path. It accepts 0�
 
 > $> pp \[\<bookmark_name\> ...\]
 
-This function accepts any number of arguments. If given a non-zero number of arguments, it prints out the given bookmarks and their associated paths. If no bookmark is given (zero arguments), then it will print out all bookmarks and their associated paths.
+This function accepts any number of arguments. If given a non-zero number of arguments, it prints out the given bookmarks and their associated paths. If no bookmark is given (zero arguments), then it will print out all bookmarks and their associated paths. Note that you can search the bookmarks with this function using incomplete bookmark names and regular expressions. The default bookmark is never searched for and will only be printed with a zero-argument pp call or if passed to pp exactly by name.
 
 ### dp
 
@@ -42,11 +38,35 @@ This function accepts any number of arguments. If given a non-zero number of arg
 
 This function accepts one or more arguments. The arguments should be bookmark names and they will be deleted from the store of bookmarks. Use this with caution, as it will not prompt for confirmation.
 
+## Advanced configuration
+
+### The default bookmark
+
+The default bookmark can be changed, but never deleted. The idea behind it is to store a temporary bookmark that can be easily used at a later time or in another instance of your shell. Since bookmarked paths are stored live into .path_db.bash, you can immediately access the default bookmark (and any other existing bookmarks) in another shell/terminal. This is useful if you want another terminal open to the same directory and need to navigate to the same path. Using the default bookmark will be explained in the subsections for sp and gp.
+
+You can rename the bookmark used to reference the default bookmark by changing the value of _PATHS_DEFAULT_BM_NAME. Note that you should subsequently update the default bookmark to prevent breakage. The bookmark name used to store the old default directory will then be treated like a normal bookmark.
+
+### Path DB
+
+You can configure the location and name of the file storing your bookmarks by changing the value of _PATHS_PATH_DB_FILE.
+
+### Function names
+
+You can somewhat easily change the function names without breaking functionality (in case of collision). To do this, modify the aliases near the top of the file. Then update the "complete" functions corresponding to each alias.
+
+### Environment
+
+All environment variables and functions defined by this script are prefixed with "_PATHS_".
+
+There are two environment variables used by this script:
+* _PATHS_PATH_DB_FILE
+* _PATHS_DEFAULT_BM_NAME
+
+The function names used to interface with the path database storing your bookmarks are aliases to the actual functions.
+
 ## Miscellaneous info
 
-I originally wrote the bare bones for this late one Friday night. It has not changed significantly since outside of the Bash completion features. The functions that comprise this tool are not robust and bugs are likely.
-
-I do plan to fix bugs, improve existing features, and to add new functionality over time.
+I originally wrote the bare bones for this late one Friday night, so I make no promises about functionality. However, I use this tool on a daily basis at my workplace, as do a number of my coworkers, so I do plan to fix bugs, improve existing features, and to add new functionality over time.
 
 ## License
 
