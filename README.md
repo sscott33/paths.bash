@@ -4,7 +4,7 @@ paths.bash is a Bash file containing several functions that work in conjunction 
 
 ## How to install
 
-Clone this repo or directly download paths.bash and add a source of the file to your .bashrc or an equivalent config file. **Important note:** using paths.bash will create and continually overwrite a file in your user's home directory called ".path_db.bash". If you want to change this before your first use, please see the *Advanced configuration* section of this README.
+Clone this repo or directly download paths.bash and add a source of the file to your .bashrc or an equivalent config file. **Important note:** using paths.bash will create and continually overwrite a file in your user's home directory called `.path_db.bash`. If you want to change this before your first use, please see the *Advanced configuration* section of this README.
 
 ## Usage
 
@@ -42,13 +42,13 @@ This function accepts one or more arguments. The arguments should be bookmark na
 
 ### The default bookmark
 
-The default bookmark can be changed, but never deleted. The idea behind it is to store a temporary bookmark that can be easily used at a later time or in another instance of your shell. Since bookmarked paths are stored live into .path_db.bash, you can immediately access the default bookmark (and any other existing bookmarks) in another shell/terminal. This is useful if you want another terminal open to the same directory and need to navigate to the same path. Using the default bookmark will be explained in the subsections for sp and gp.
+The default bookmark can be changed, but never deleted. The idea behind it is to store a temporary bookmark that can be easily used at a later time or in another instance of your shell. Since bookmarked paths are stored live into `.path_db.bash`, you can immediately access the default bookmark (and any other existing bookmarks) in another shell/terminal. This is useful if you want another terminal open to the same directory and need to navigate to the same path. Using the default bookmark will be explained in the subsections for sp and gp.
 
-You can rename the bookmark used to reference the default bookmark by changing the value of _PATHS_DEFAULT_BM_NAME. Note that you should subsequently update the default bookmark to prevent breakage. The bookmark name used to store the old default directory will then be treated like a normal bookmark.
+You can rename the bookmark used to reference the default bookmark by changing the value of `_PATHS_DEFAULT_BM_NAME`. Note that you should subsequently update the default bookmark to prevent breakage. The bookmark name used to store the old default directory will then be treated like a normal bookmark.
 
 ### Path DB
 
-You can configure the location and name of the file storing your bookmarks by changing the value of _PATHS_PATH_DB_FILE.
+You can configure the location and name of the file storing your bookmarks by changing the value of `_PATHS_PATH_DB_FILE`.
 
 ### Function names
 
@@ -56,11 +56,11 @@ You can somewhat easily change the function names without breaking functionality
 
 ### Environment
 
-All environment variables and functions defined by this script are prefixed with "_PATHS_".
+All environment variables and functions defined by this script are prefixed with `_PATHS_`.
 
 There are two environment variables used by this script:
-* _PATHS_PATH_DB_FILE
-* _PATHS_DEFAULT_BM_NAME
+* `_PATHS_PATH_DB_FILE`
+* `_PATHS_DEFAULT_BM_NAME`
 
 The function names used to interface with the path database storing your bookmarks are aliases to the actual functions.
 
