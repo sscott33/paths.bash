@@ -106,7 +106,7 @@ _PATHS_SP () {
             shift
             path="$1"
 			;;
-        -n|--name)
+        -b|--bookmark)
             shift
             bookmark_name="$1"
             ;;
@@ -286,6 +286,74 @@ _PATHS_GP () {
     # source database
     . "$_PATHS_PATH_DB_FILE"
     local path
+    local bookmark_name
+
+    declare -a positional_opts
+	while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
+        -b|--bookmark)
+            shift
+            bookmark_name="$1"
+            ;;
+        -h|--help)
+            # do help
+            echo "Insert help text here..."
+            return 0
+            ;;
+        [^-]*)
+            positional_opts+=("$1")
+            # is this shift required? or will it break things?
+            # A: it will break things
+            #shift
+            ;;
+	esac; shift; done
+	if [[ "$1" == '--' ]]; then shift; fi
+
+    if [[ ${#positional_opts[@]} -gt 0 ]]; then
+        set -- "${positional_opts[@]}" "$@"
+    fi
+
+    # set the bookmark name if unset
+    if [[ -z "$bookmark_name" ]]; then
+        if [[ -n "$1" ]]; then
+            bookmark_name="$1"
+        else
+            bookmark_name="$_PATHS_DEFAULT_BM_NAME"
+        fi
+    fi
+
+    # sanity check the name
+    path="${path_db["$bookmark_name"]}"
+    if [[ -z "$path" ]]; then
+        echo "Error: nonexistent bookmark '$bookmark_name" >&2
+        return 1
+    else
+        if ! path="$(_PATHS_PP -r "$bookmark_name")"; then
+            local retval=$?
+            echo "Error: path resolution failed; see previous errors"
+            return $?
+        fi
+
+
+#    elif [[ "${path:0:1}" == "/" ]]; then  # handle absolute path
+#    elif [[ "$path" =~ ^(r|f)([0-9])+:(.+) ]]; then  # handle relative path or function-based bookmark
+#        local type="${BASH_REMATCH[1]}"
+#        local name_len=${BASH_REMATCH[2]}
+#        local value="${BASH_REMATCH[3]}"
+#
+    fi
+
+    # make sure path exists
+    if [[ -e "$path" ]]; then
+        cd "$path" && echo "working directory is now '$(pwd)'"
+        return $?
+    else
+        echo "Error: destination does not exist; destination: '$path'" >&2
+        return 1
+    fi
+
+
+    #return 0
+    ####################
     case $# in
         0) # work with default
             path="${path_db[$_PATHS_DEFAULT_BM_NAME]}"
