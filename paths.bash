@@ -390,6 +390,108 @@ _PATHS_DP () {
     local path_db
     # source database
     . "$_PATHS_PATH_DB_FILE"
+
+    local clean_absolute=false
+    local clean_functions=false
+    local clean_relative=false
+    local confirm=true
+
+    declare -a positional_opts
+	while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
+        -ca|--clean-absolute)
+            clean_absolute=true
+            ;;
+        -cf|--clean-functions)
+            clean_functions=true
+            # this is a no-op for now; not sure how or if to handle
+            ;;
+        -cr|--clean-relative)
+            clean_relative=true
+            # this is a no-op for now; complicated to handle and must be done after absolute path cleaning
+            # this also needs to check first if the bookmark is broken internally and second if the path exists when resolved
+            # this is also really complicated considering the root may be a function
+            ;;
+        -n|--no-confirm)  # specifically for --clean-*; skips prompts to delete and just does it
+            confirm=false
+            ;;
+        -h|--help)
+            # do help
+            echo "Insert help text here..."
+            return 0
+            ;;
+        [^-]*)
+            positional_opts+=("$1")
+            # is this shift required? or will it break things?
+            # A: it will break things
+            #shift
+            ;;
+	esac; shift; done
+	if [[ "$1" == '--' ]]; then shift; fi
+
+    if [[ ${#positional_opts[@]} -gt 0 ]]; then
+        set -- "${positional_opts[@]}" "$@"
+    fi
+
+    if $clean_absolute; then
+        # foreach bookmark, resolve and if result is nonexistent
+        local bookmark
+        for bookmark in "${!path_db[@]}"; do
+            if [[ "${path_db["$bookmark"]:0:1}" == "/" && ! -d "${path_db["$bookmark"]}" ]]; then
+                echo -n "The path specified by '$bookmark' no longer exists or is not a directory, "
+                if $confirm; then
+                    local ans
+                    local ask=true
+                    while $ask; do
+                        read -p "would you like to remove this bookmark? (y/n) " ans
+                        ask=false
+                        case "${ans,,}" in
+                            y|yes)
+                                ask=false
+                                ;;
+                            n|no)
+                                ask=false
+                                continue 2
+                                ;;
+                        esac
+                    done
+                fi
+                echo "removing '$bookmark'"
+                unset path_db["$bookmark"]
+            fi
+        done
+    fi
+
+    local bookmark
+    for bookmark in "$@"; do
+        if [[ -z "${path_db["$bookmark"]}" ]]; then
+            echo "Error: bookmark '$bookmark' not found" >&2
+            return 1
+        fi
+
+        if $confirm; then
+            local ans
+            local ask=true
+            while $ask; do
+                read -p "Would you like to remove '$bookmark' from your bookmarks? (y/n) " ans
+                ask=false
+                case "${ans,,}" in
+                    y|yes)
+                        ask=false
+                        ;;
+                    n|no)
+                        ask=false
+                        continue 2
+                        ;;
+                esac
+            done
+        fi
+        echo "removing '$bookmark'"
+        unset path_db["$bookmark"]
+    done
+
+    declare -p path_db > "${_PATHS_PATH_DB_FILE}"
+    return 0
+    #########################
     case $# in
         0) # print usage
             echo "HELP: use this function to delete one or more path references by specifying their names; view path references with pp"
