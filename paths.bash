@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 #set -x
-export _PATHS_PATH_DB_FILE="/home/sam/Documents/lantern_day/2024-05-14/paths.bash/.path_db.bash"
+export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
     # stored dictionary is path_db
 export _PATHS_DEFAULT_BM_NAME=_default
 
