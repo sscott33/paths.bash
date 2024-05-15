@@ -20,8 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-set -x
-export _PATHS_PATH_DB_FILE="/home/esmaosc/lantern_day/2024-04-02/.path_db.bash"
+#set -x
+export _PATHS_PATH_DB_FILE="/home/sam/Documents/lantern_day/2024-05-14/paths.bash/.path_db.bash"
     # stored dictionary is path_db
 export _PATHS_DEFAULT_BM_NAME=_default
 
@@ -56,7 +56,7 @@ _key_completions() {
     else
         # copy array of completions to COMPREPLY (must use printf for spaces to be valid because IFS is newline)
         # the '%q' preserves the completions in a format that can be reused as shell input & uses $-strings to handle escape chars
-        COMPREPLY=($(printf '%q\n' "${completions[@]}"))
+        COMPREPLY=($(printf -- '%q\n' "${completions[@]}"))
     fi
 }
 
@@ -198,21 +198,20 @@ _PATHS_SP () {
         fi
 
         #local resolved_path="$(realpath --relative-to "$path")"
-        local resolved_path="$(realpath --relative-to "$(_PATHS_PP -r "$bookmark_name")" "$path")"
+        local resolved_path="$(realpath --relative-to "$(_PATHS_PP -R "$rel_bookmark_name")" "$path")"
         # not yet sure how to check this path until _PATHS_PP resolves it
         #if [[ ! -e "$resolved_path" ]]; then
         #    echo "Error: path '$path' ($resolved_path) does not exist" >&2
         #    return 1
         #fi
 
-        local name_len=${#bookmark_name}
-        local old_path="$resolved_path"
-        resolved_path="r$name_len:$bookmark_name$resolved_path"
+        local name_len=${#rel_bookmark_name}
+        resolved_path="r$name_len:$rel_bookmark_name$resolved_path"
 
         path_db["$bookmark_name"]="$resolved_path"
         declare -p path_db > "$_PATHS_PATH_DB_FILE"
 
-        echo "Saved '$path' as '$old_path' relative to '$bookmark_name'"
+        echo "Saved '$path' as '$bookmark_name' relative to '$rel_bookmark_name'"
         return 0
 
     else
@@ -244,7 +243,7 @@ _PATHS_SP () {
         path_db["$bookmark_name"]="f:$func_name:$func_def"
         
     elif [[ -n "$rel_bookmark_name" ]]; then
-        if [[ -z "$path_db["$bookmark_name"]" ]]; then
+        if [[ -z "${path_db["$bookmark_name"]}" ]]; then
             echo "Error: $bookmark_name is not an existing bookmark" >&2
             return 1
         fi
@@ -255,7 +254,7 @@ _PATHS_SP () {
             return 1
         fi
 
-        path="$(realpath --relative-to "$(_PATHS_PP -r "$bookmark_name")" "$path")"
+        path="$(realpath --relative-to "$(_PATHS_PP -R "$bookmark_name")" "$path")"
 
         path_db["$rel_bookmark_name"]="r:$bookmark_name:$path"
 
@@ -327,10 +326,10 @@ _PATHS_GP () {
         echo "Error: nonexistent bookmark '$bookmark_name" >&2
         return 1
     else
-        if ! path="$(_PATHS_PP -r "$bookmark_name")"; then
+        if ! path="$(_PATHS_PP -R "$bookmark_name")"; then
             local retval=$?
             echo "Error: path resolution failed; see previous errors"
-            return $?
+            return $retval
         fi
 
 
@@ -352,7 +351,7 @@ _PATHS_GP () {
     fi
 
 
-    #return 0
+    return 0
     ####################
     case $# in
         0) # work with default
@@ -360,7 +359,7 @@ _PATHS_GP () {
             ;;
         1) # work with named directory
             #path="${path_db["$1"]}"
-            if ! path="$(_PATHS_PP -r "$1")"; then
+            if ! path="$(_PATHS_PP -R "$1")"; then
                 echo "Error: lookup of '$1' in the bookmark database failed" >&2
                 return 1
             fi
@@ -456,7 +455,7 @@ _PATHS_DP () {
                     done
                 fi
                 echo "removing '$bookmark'"
-                unset path_db["$bookmark"]
+                unset "path_db[$bookmark]"
             fi
         done
     fi
@@ -486,7 +485,7 @@ _PATHS_DP () {
             done
         fi
         echo "removing '$bookmark'"
-        unset path_db["$bookmark"]
+        unset "path_db[$bookmark]"
     done
 
     declare -p path_db > "${_PATHS_PATH_DB_FILE}"
@@ -500,7 +499,7 @@ _PATHS_DP () {
         *) # delete one or more named paths
             while [[ -n "$1" ]]; do
                 [[ "$1" == "$_PATHS_DEFAULT_BM_NAME" ]] && echo "Error: refusing delete default entry: '$_PATHS_DEFAULT_BM_NAME'" >2 && shift && continue
-                unset path_db["$1"] && echo "deleted reference to '$1'"
+                unset "path_db[$1]" && echo "deleted reference to '$1'"
                 shift
             done
             ;;
@@ -512,108 +511,388 @@ _PATHS_DP () {
 # print paths
 _PATHS_PP () {
     local path_db
+    # source database
     . "$_PATHS_PATH_DB_FILE"
 
-    local key
-    local path
-    local value
     local resolve=false
-    local prefix
-    local parent
-    local func_name
-    local func_def
+    local exact_resolve=false
+    local return_function_body=false
 
-    # allow user to specify -r or --
-    while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case "$1" in
-        -r)
+    declare -a positional_opts
+	while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
+        -R|--exact-resolve)
+            exact_resolve=true
+            ;;
+        -r|--resolve)
             resolve=true
             ;;
-    esac; shift; done
-    if [[ "$1" == '--' ]]; then shift; fi
-
-
-    local starting_argument_count=$#
-        # must store this because this variable will decrease with every "shift" call
-    case $# in
-        0) # print all bookmarks
-            # print the default bookmark
-            echo "$_PATHS_DEFAULT_BM_NAME (default) : ${path_db[$_PATHS_DEFAULT_BM_NAME]}"
-            unset path_db[$_PATHS_DEFAULT_BM_NAME]
-
-            # separate default and regular bookmarks with a blank line
-            [[ ${#path_db[@]} -gt 0 ]] && echo
-
-            # print the other bookmarks
-            for key in "${!path_db[@]}"; do
-                value="${path_db["$key"]}"
-                value="$(_PATHS_FORMAT_BM "$value")"
-
-                printf "%s\n" "$key : $value"
-            done | sort
+        -f|--function-body)
+            return_function_body=true
             ;;
-        *) # print the requested bookmark(s); newline separated
-
-            path="${path_db["$1"]}"
-
-            while [[ -n "$1" ]]; do
-                path="${path_db["$1"]}"
-                if [[ -z "$path" ]]; then
-                    unset path_db[$_PATHS_DEFAULT_BM_NAME]
-                    for key in "${!path_db[@]}"; do
-                        value="$(_PATHS_FORMAT_BM "${path_db["$key"]}")"
-                        [[ "$key" =~ $1 ]] && printf "%s\n" "$key : $value"
-                    done
-                elif [[ $starting_argument_count -eq 1 ]]; then
-                    # if there is only one bookmark and it's exactly named, print path without name -> useful for $(pp <bookmark>)
-                    prefix="${path:0:1}"
-                    if [[ "$prefix" == "f" ]]; then
-                        #path="$(cut -d: -f3 <<<"$path")"
-                        if [[ "$resolve" == "true" ]]; then
-                            #func_name="$(cut -d: -f2 <<<"$path")"
-                            func_name="${path#*:}"
-                            func_def="${func_name#*:}"
-                            func_name="${func_name%:*}"
-                            if ! path="$(eval "$func_def" && "$func_name")"; then
-                                echo Error: failure to execute $func_name, in bookmark $1 >&2
-                                return 1
-                            fi
-                        else
-                            # remove the first two elements of the entry
-                            path="${path#*:}"
-                            path="${path#*:}"
-                        fi
-                    elif [[ "$prefix" == "r" ]]; then
-                        if [[ "$resolve" == "true" ]]; then
-                            parent="$(cut -d: -f2 <<<"$path")"
-                            parent="$(_PATHS_PP -r "$parent")"
-                            path="$(cut -d: -f3 <<<"$path")"
-                            path="$parent/$path"
-                        else
-                            path="${path:2}"
-                        fi
-                    elif [[ "$prefix" == "a" ]]; then
-                        path="${path:2}"
-                    fi
-                    printf "%s\n" "$path"
-                    #printf "%s\n" "$(_PATHS_FORMAT_BM "$path")"
-                else
-                    printf "%s\n" "$1 : $(_PATHS_FORMAT_BM "$path")"
-                fi
-                shift
-            done | { [[ -z "$path" ]] && sort -u || cat; }
+        -h|--help)
+            # do help
+            echo "Insert help text here..."
+            return 0
             ;;
-    esac
-}
+        [^-]*)
+            positional_opts+=("$1")
+            # is this shift required? or will it break things?
+            # A: it will break things
+            #shift
+            ;;
+	esac; shift; done
+	if [[ "$1" == '--' ]]; then shift; fi
 
-_PATHS_FORMAT_BM () {
-    local bookmark="$1"
-    if [[ "${bookmark:0:1}" == "f" ]]; then
-        bookmark="$(tr -s [:space:] ' ' <<<"$bookmark" | cut -d: -f3)"
-        bookmark="${bookmark:0:30} ..."
-    else
-        bookmark="${bookmark:2}"
+    if [[ ${#positional_opts[@]} -gt 0 ]]; then
+        set -- "${positional_opts[@]}" "$@"
     fi
 
-    printf "%s" "$bookmark"
+    if $exact_resolve; then
+        if [[ ${#@} -ne 1 ]]; then
+            echo "Error: expected exactly one positional argument (subshell depth: $BASH_SUBSHELL, function stack: "${FUNCNAME[*]}")" >&2
+            return 1
+        fi
+
+        local key="$1"
+        local value="${path_db["$key"]}"
+
+        # do we have an exact match?
+        if [[ "$value" == "" ]]; then
+            echo "Error: expected exact bookmark name, but found no such bookmark '$key' (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+            return 1
+        else
+            # what type of bookmark do we have?
+            printf -- "%s" "$(_PATHS_FORMAT_BM "$key" true false)"
+
+#            case "$value" in
+#                /*)
+#                    printf -- "%s\n" "$value"
+#                    ;;
+#                f*)
+#                    # execute function and return value
+#                    local result
+#                    if [[ "$value" =~ ^f([0-9]+):(.+)$ ]]; then
+#                        local len=${BASH_REMATCH[1]}
+#                        local func_name="${BASH_REMATCH[2]::$len}"
+#                        local func_def="${BASH_REMATCH[2]:$len}"
+#                        if ! result="$(eval "$func_def" && "$func_name")"; then
+#                            echo "Error: evaluation of function '$func_name' failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+#                        fi
+#
+#                        printf -- "%s\n" "$result"
+#                    else
+#                        # truncate to first parenthesis and then limit to 20 characters (should prevent long lines and newline chars)
+#                        value="${value%(*}"
+#                        value="${value::20}"
+#
+#                        echo "Error: parsing of bookmark '${value::20}' (truncated) failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+#                        return 1
+#                    fi
+#                    ;;
+#                r*)
+#                    # recursive lookup of the relative bookmark's pointer
+#                    if [[ "$value" =~ ^r([0-9]+):(.+)$ ]]; then
+#                        local len=${BASH_REMATCH[1]}
+#                        local bookmark_name="${BASH_REMATCH[2]::$len}"
+#                        local relative_path="${BASH_REMATCH[2]:$len}"
+#
+#                        if ! result="$(_PATHS_PP -R "$bookmark_name")"; then
+#                            echo "Error: recursive lookup of bookmark '$value' failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+#                            return 1
+#                        fi
+#
+#                        local resolved_path="$result/$relative_path"
+#                        printf -- "%s\n" "$resolved_path"
+#                    else
+#                        echo "Error: parsing of bookmark '${value::20}' (truncated) failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+#                        return 1
+#                    fi
+#
+#                    ;;
+#                *)
+#                    echo "Error: invalid bookmark value returned by key '$key' (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+#            esac
+        fi
+
+        return 0
+    fi
+
+    # exact_resolve not specified
+
+    # for each positional argument
+
+    # are we resolving values?
+
+    # main body
+
+    # need to determine what to print
+        # all search values are positional
+        # search values can be exact or regex
+
+    # need to decide how to print each thing we found
+        # resolve results?
+            # -r general resolution
+            # -R expect one exact bookmark name and will resolve its value; error otherwise
+
+        # separate match results with "---\n"
+        # sort each match's results based on bookmark name
+        # match result groupings are in the order of searches supplied
+        # if one search term is supplied, no sep or header needed
+            # else: each result set headed by "searching for <term>:\n"
+
+        # print key-value pairs using tab-separation piped to column
+            # _PATHS_PP flag to opt for output truncation at terminal width or perform smarter wrapping (look into -W)
+
+        # functions will only not be truncated when requested by the user
+
+    local tab_char
+    printf -v tab_char "\t"
+    if [[ ${#@} -eq 0 ]] ; then  # print all
+        {
+            printf -- "Bookmark Name\tBookmark Value\n"  # table headers
+            printf -- "-------------\t--------------\n"
+
+            # print the default bookmark first
+            printf -- "default (%s)\t%s\n" "$_PATHS_DEFAULT_BM_NAME" "$(_PATHS_FORMAT_BM "$_PATHS_DEFAULT_BM_NAME" $resolve $return_function_body)"
+            #printf -- "-----\n"
+            echo
+            unset "path_db[$_PATHS_DEFAULT_BM_NAME]"
+
+            # print sorted bookmarks less the default
+            local key
+            for key in "${!path_db[@]}"; do
+                #echo resolve: $resolve >&2
+                printf -- "%s\t%s\n" "$key" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+            done | sort
+        } | column -t -s "$tab_char" -W2 -L
+
+        return 0
+    fi
+
+    # one argument plus exact match -> don't need special formatting or bookmark name in the output
+    local value="${path_db["$1"]}"
+    if [[ ${#@} -eq 1 && "$value" != "" ]]; then
+        local result="$(_PATHS_FORMAT_BM "$1" $resolve $return_function_body)"
+        printf -- "%s\n" "$result"
+        return 0
+    fi
+
+
+    local tab_char
+    printf -v tab_char "\t"
+    # handle multiple expressions plus regex
+    {
+        printf -- "Search Expression\tMatched Bookmarks\tBookmark Value\n"
+        printf -- "-----------------\t-----------------\t--------------\n"
+        local arg
+        for arg in "$@"; do
+            printf -- "%s" "$arg"  # print the search expression
+            {
+                local value="${path_db["$arg"]}"
+                if [[ "$value" != "" ]]; then
+                    # handle exact match
+                    local result="$(_PATHS_FORMAT_BM "$arg" $resolve $return_function_body)"
+                    printf -- "\t%s\t%s\n" "$arg" "$result"
+                else
+                    # handle regex lookup here by iterating over the keys and regex testing each one
+                    local key
+                    for key in "${!path_db[@]}"; do
+                        [[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]] && printf -- "\t%s\t%s\n" "$key" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+                    done
+                fi
+            } | sort  # sort each match group
+        done
+    } | column -t -s "$tab_char" -W3 -L
 }
-set +x
+
+#_PATHS_PP () {
+#    local path_db
+#    . "$_PATHS_PATH_DB_FILE"
+#
+#    local key
+#    local path
+#    local value
+#    local resolve=false
+#    local prefix
+#    local parent
+#    local func_name
+#    local func_def
+#
+#    # allow user to specify -r or --
+#    while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case "$1" in
+#        -r)
+#            resolve=true
+#            ;;
+#    esac; shift; done
+#    if [[ "$1" == '--' ]]; then shift; fi
+#
+#
+#    local starting_argument_count=$#
+#        # must store this because this variable will decrease with every "shift" call
+#    case $# in
+#        0) # print all bookmarks
+#            # print the default bookmark
+#            echo "$_PATHS_DEFAULT_BM_NAME (default) : ${path_db[$_PATHS_DEFAULT_BM_NAME]}"
+#            unset path_db[$_PATHS_DEFAULT_BM_NAME]
+#
+#            # separate default and regular bookmarks with a blank line
+#            [[ ${#path_db[@]} -gt 0 ]] && echo
+#
+#            # print the other bookmarks
+#            for key in "${!path_db[@]}"; do
+#                value="${path_db["$key"]}"
+#                value="$(_PATHS_FORMAT_BM "$value")"
+#
+#                printf -- "%s\n" "$key : $value"
+#            done | sort
+#            ;;
+#        *) # print the requested bookmark(s); newline separated
+#
+#            path="${path_db["$1"]}"
+#
+#            while [[ -n "$1" ]]; do
+#                path="${path_db["$1"]}"
+#                if [[ -z "$path" ]]; then
+#                    unset path_db[$_PATHS_DEFAULT_BM_NAME]
+#                    for key in "${!path_db[@]}"; do
+#                        value="$(_PATHS_FORMAT_BM "${path_db["$key"]}")"
+#                        [[ "$key" =~ $1 ]] && printf -- "%s\n" "$key : $value"
+#                    done
+#                elif [[ $starting_argument_count -eq 1 ]]; then
+#                    # if there is only one bookmark and it's exactly named, print path without name -> useful for $(pp <bookmark>)
+#                    prefix="${path:0:1}"
+#                    if [[ "$prefix" == "f" ]]; then
+#                        #path="$(cut -d: -f3 <<<"$path")"
+#                        if [[ "$resolve" == "true" ]]; then
+#                            #func_name="$(cut -d: -f2 <<<"$path")"
+#                            func_name="${path#*:}"
+#                            func_def="${func_name#*:}"
+#                            func_name="${func_name%:*}"
+#                            if ! path="$(eval "$func_def" && "$func_name")"; then
+#                                echo Error: failure to execute $func_name, in bookmark $1 >&2
+#                                return 1
+#                            fi
+#                        else
+#                            # remove the first two elements of the entry
+#                            path="${path#*:}"
+#                            path="${path#*:}"
+#                        fi
+#                    elif [[ "$prefix" == "r" ]]; then
+#                        if [[ "$resolve" == "true" ]]; then
+#                            parent="$(cut -d: -f2 <<<"$path")"
+#                            parent="$(_PATHS_PP -r "$parent")"
+#                            path="$(cut -d: -f3 <<<"$path")"
+#                            path="$parent/$path"
+#                        else
+#                            path="${path:2}"
+#                        fi
+#                    elif [[ "$prefix" == "a" ]]; then
+#                        path="${path:2}"
+#                    fi
+#                    printf -- "%s\n" "$path"
+#                    #printf -- "%s\n" "$(_PATHS_FORMAT_BM "$path")"
+#                else
+#                    printf -- "%s\n" "$1 : $(_PATHS_FORMAT_BM "$path")"
+#                fi
+#                shift
+#            done | { [[ -z "$path" ]] && sort -u || cat; }
+#            ;;
+#    esac
+#}
+#
+_PATHS_FORMAT_BM () {
+    local bookmark_name="$1"
+    local resolve="$2"
+    local return_function_body="$3"
+
+    local path_db
+    . "$_PATHS_PATH_DB_FILE"
+
+    local value="${path_db["$bookmark_name"]}"
+    case "$value" in
+        /*)
+            printf -- "%s" "$value"
+            ;;
+        f*)
+            # execute function and return value
+            local result
+            if [[ "$value" =~ ^f([0-9]+):(.+)$ ]]; then
+                local len=${BASH_REMATCH[1]}
+                local func_name="${BASH_REMATCH[2]::$len}"
+                local func_def="${BASH_REMATCH[2]:$len}"
+
+                if $resolve; then
+                    if ! result="$(eval "$func_def" && "$func_name")"; then
+                        echo "Error: evaluation of function '$func_name' failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+                        return 1
+                    fi
+                    printf -- "%s" "$result"
+                    return 0
+                fi
+
+                if $return_function_body; then
+                    # print the entire function definition
+                    printf -- "%s" "$func_def"
+                    return 0
+                else
+                    # reduce the length and use escaped chars for one-line display based on the available space
+                    local line_length=$(tput cols)
+                    local chars_before=${#func_def}
+                    local ellipsis=""
+                    func_def="${func_def::$line_length/3}"
+                    [[ ${#func_def} -lt $chars_before ]] && ellipsis=" ..."
+                    printf -- "%q%s" "${func_def}" "$ellipsis"
+                    return 0
+                fi
+            else
+                # truncate to first parenthesis and then limit to 20 characters (should prevent long lines and newline chars)
+                value="${value%(*}"
+                value="${value::20}"
+
+                echo "Error: parsing of bookmark '${value::20}' (truncated) failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+                return 1
+            fi
+            ;;
+        r*)
+            # recursive lookup of the relative bookmark's pointer
+            if [[ "$value" =~ ^r([0-9]+):(.+)$ ]]; then
+                local len=${BASH_REMATCH[1]}
+                local bookmark_name="${BASH_REMATCH[2]::$len}"
+                local relative_path="${BASH_REMATCH[2]:$len}"
+
+                if $resolve; then
+                    if result="$(_PATHS_PP -R "$bookmark_name")"; then
+                        local resolved_path="$result/$relative_path"
+                        printf -- "%s" "$resolved_path"
+                        return 0
+                    else
+                        echo "Error: recursive lookup of bookmark '$value' failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+                        return 1
+                    fi
+                fi
+
+                printf -- "[%s]/%s" "$bookmark_name" "$relative_path"
+                return 0
+
+            else
+                echo "Error: parsing of bookmark '${value::20}' (truncated) failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+                return 1
+            fi
+
+            ;;
+        *)
+            echo "Error: invalid bookmark value returned by key '$bookmark_name' (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+    esac
+}
+#_PATHS_FORMAT_BM () {
+#    local bookmark="$1"
+#    if [[ "${bookmark:0:1}" == "f" ]]; then
+#        bookmark="$(tr -s [:space:] ' ' <<<"$bookmark" | cut -d: -f3)"
+#        bookmark="${bookmark:0:30} ..."
+#    else
+#        bookmark="${bookmark:2}"
+#    fi
+#
+#    printf -- "%s" "$bookmark"
+#}
+#set +x
