@@ -90,26 +90,92 @@ _PATHS_FUNC_COMPLETIONS () {
 }
 
 # add completion functionality to all functions except sp; not sure how to do completion based on argument position
-complete -F _PATHS_KEY_COMPLETIONS gp
-complete -F _PATHS_KEY_COMPLETIONS dp
-complete -F _PATHS_KEY_COMPLETIONS pp
+_PATHS_GP_COMPLETION () {
+    declare -a short_opts=(-h -b)
+    declare -a long_opts=(--help --bookmark)
+    local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
-# sp positional completion
-#_PATHS_SP_COMPLETION() {
-#    case $COMP_CWORD in
-#        1)
-#            # complete directory names
-#            COMPREPLY=($(compgen -o dirnames -- "${COMP_WORDS[COMP_CWORD]}"))
-#            ;;
-#        2)
-#            # offer existing bookmarks as options for the case of reassigning a bookmark
-#            _PATHS_KEY_COMPLETIONS
-#            ;;
-#    esac
-#}
+    case "${COMP_WORDS[COMP_CWORD-1]}" in
+        -b|--bookmark)
+            _PATHS_KEY_COMPLETIONS
+            ;;
+    esac
+
+    case "${COMP_WORDS[COMP_CWORD]}" in 
+        --*)
+            COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
+            ;;
+        -*)
+            COMPREPLY=($(compgen -W "${short_opts[*]}" -- "$partial_key"))
+            ;;
+    esac
+
+    #rm tmp
+    # figure out how many positional args we have
+    local positional_arg_num=-1
+    local arg
+    local opt
+    local opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
+    for arg in "${COMP_WORDS[@]}"; do
+        [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
+        for opt in "${opts_with_arg[@]}"; do
+            [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
+        done
+        #echo $arg >> tmp
+    done
+
+    #echo $positional_arg_num >> tmp
+    # complete the positional arguments
+    case $positional_arg_num in
+        1)
+            # offer existing bookmarks as options for the case of reassigning a bookmark
+            _PATHS_KEY_COMPLETIONS
+            ;;
+    esac
+}
+complete -F _PATHS_GP_COMPLETION gp
+
+_PATHS_DP_COMPLETION () {
+    declare -a short_opts=(-h -ca -cf -cr -n)
+    declare -a long_opts=(--help --clean-absolute --clean-functions --clean-relative --no-confirm)
+    local partial_key="${COMP_WORDS[COMP_CWORD]}"
+
+    case "${COMP_WORDS[COMP_CWORD]}" in 
+        --*)
+            COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
+            ;;
+        -*)
+            COMPREPLY=($(compgen -W "${short_opts[*]}" -- "$partial_key"))
+            ;;
+        *)
+            _PATHS_KEY_COMPLETIONS
+            ;;
+    esac
+}
+complete -F _PATHS_DP_COMPLETION dp
+
+_PATHS_PP_COMPLETION () {
+    declare -a short_opts=(-h -R -r -f)
+    declare -a long_opts=(--help --exact-resolve --resolve --function-body)
+    local partial_key="${COMP_WORDS[COMP_CWORD]}"
+
+    case "${COMP_WORDS[COMP_CWORD]}" in 
+        --*)
+            COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
+            ;;
+        -*)
+            COMPREPLY=($(compgen -W "${short_opts[*]}" -- "$partial_key"))
+            ;;
+        *)
+            _PATHS_KEY_COMPLETIONS
+            ;;
+    esac
+}
+complete -F _PATHS_PP_COMPLETION pp
+
 _PATHS_SP_COMPLETION () {
     declare -a short_opts=(-b -f -p -r -h)
-    declare -a long_opts=(--bookmark --function --path --relative-to)
+    declare -a long_opts=(--bookmark --function --path --relative-to --help)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
     case "${COMP_WORDS[COMP_CWORD-1]}" in
@@ -491,9 +557,11 @@ _PATHS_DP () {
         -cf|--clean-functions)
             clean_functions=true
             # this is a no-op for now; not sure how or if to handle
+            echo "Info: '$1' not yet implemented"
             ;;
         -cr|--clean-relative)
             clean_relative=true
+            echo "Info: '$1' not yet implemented"
             # this is a no-op for now; complicated to handle and must be done after absolute path cleaning
             # this also needs to check first if the bookmark is broken internally and second if the path exists when resolved
             # this is also really complicated considering the root may be a function
