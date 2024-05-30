@@ -21,8 +21,8 @@
 # SOFTWARE.
 
 #set -x
-#export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
-export _PATHS_PATH_DB_FILE="/home/sam/Documents/lantern_day/2024-05-14/paths.bash/.path_db.bash"
+export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
+#export _PATHS_PATH_DB_FILE="/home/sam/Documents/lantern_day/2024-05-14/paths.bash/.path_db.bash"
     # stored dictionary is path_db
 export _PATHS_DEFAULT_BM_NAME=_default
 
@@ -276,7 +276,7 @@ _PATHS_SP () {
             echo
             echo "    This function creates a new bookmark. It can be used to modify existing bookmarks by overwriting them. Note"
             echo "    that between 0 and 2 positional arguments can be accepted. Both positional arguments can be specified with"
-            echo "    a named option."
+            echo "    a named option (which takes precidence if used simultaneously)."
             echo
             echo "    Key assumptions:"
             echo "        - if no path is specified, the current directory is used"
