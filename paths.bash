@@ -273,7 +273,7 @@ _PATHS_SP () {
             ;;
         -h|--help)  # do help
             echo "Usage:"
-            echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-f|--function <function_name>] [-p|--path <path>]"
+            echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-f|--function <function_name>] [-p|--path <path>] [-n|--no-confirm]"
             echo "    ${FUNCNAME//[^[:space:]]/ } [-r|--relative-to <bookmark>] [-h|--help] [<bookmark_name>] [<path>]"
             echo
             echo "    This function creates a new bookmark. It can be used to modify existing bookmarks by overwriting them. Note"
@@ -291,6 +291,7 @@ _PATHS_SP () {
             echo "        -f|--function <arg>       name of the function to use for this bookmark; the function definition is stored"
             echo "        -p|--path <arg>           the path which the bookmark points to"
             echo "        -r|--relative-to <arg>    the name of an existing bookmark with which this bookmark will be relative to"
+            echo "        -n|--no-confirm           do not ask for confirmation prior to overwriting an existing bookmark"
             echo "        -h|--help                 print this help"
             echo
             echo "Bookmark types:"
