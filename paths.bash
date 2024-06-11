@@ -20,7 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-#set -x
 export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
     # stored dictionary is path_db
 export _PATHS_DEFAULT_BM_NAME=_default
@@ -131,7 +130,7 @@ _PATHS_GP_COMPLETION () {
             ;;
     esac
 }
-complete -F _PATHS_GP_COMPLETION $_PATHS_FUNC_ALIASES[_PATHS_GP]
+complete -F _PATHS_GP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_GP]}
 
 _PATHS_DP_COMPLETION () {
     declare -a short_opts=(-h -ca -cf -cr -n)
@@ -150,7 +149,7 @@ _PATHS_DP_COMPLETION () {
             ;;
     esac
 }
-complete -F _PATHS_DP_COMPLETION $_PATHS_FUNC_ALIASES[_PATHS_DP]
+complete -F _PATHS_DP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_DP]}
 
 _PATHS_PP_COMPLETION () {
     declare -a short_opts=(-h -R -r -f)
@@ -169,7 +168,7 @@ _PATHS_PP_COMPLETION () {
             ;;
     esac
 }
-complete -F _PATHS_PP_COMPLETION $_PATHS_FUNC_ALIASES[_PATHS_PP]
+complete -F _PATHS_PP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_PP]}
 
 _PATHS_SP_COMPLETION () {
     declare -a short_opts=(-b -f -p -r -n -h)
@@ -191,7 +190,6 @@ _PATHS_SP_COMPLETION () {
             ;;
     esac
 
-    #set -x
     case "${COMP_WORDS[COMP_CWORD]}" in 
         --*)
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
@@ -200,7 +198,6 @@ _PATHS_SP_COMPLETION () {
             COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
             ;;
     esac
-    #set +x
 
     # figure out how many positional args we have
     local positional_arg_num=-1
@@ -225,9 +222,8 @@ _PATHS_SP_COMPLETION () {
             _PATHS_KEY_COMPLETIONS
             ;;
     esac
-    #set +x
 }
-complete -F _PATHS_SP_COMPLETION $_PATHS_FUNC_ALIASES[_PATHS_SP]
+complete -F _PATHS_SP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
 
 # init path database if it does not exist
 if [[ ! -e "$_PATHS_PATH_DB_FILE" ]]; then
@@ -977,6 +973,5 @@ _PATHS_FORMAT_BM () {
             echo "Error: invalid bookmark value returned by key '$bookmark_name' (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
     esac
 }
-#set +x
 
 unset _PATHS_FUNC_ALIASES
