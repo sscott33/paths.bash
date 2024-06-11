@@ -22,15 +22,16 @@
 
 #set -x
 export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
-#export _PATHS_PATH_DB_FILE="/home/sam/Documents/lantern_day/2024-05-14/paths.bash/.path_db.bash"
     # stored dictionary is path_db
 export _PATHS_DEFAULT_BM_NAME=_default
 
+declare -A _PATHS_FUNC_ALIASES=([_PATHS_GP]="gp" [_PATHS_SP]="sp" [_PATHS_DP]="dp" [_PATHS_PP]="pp")
+
 # allow for renaming the functions in case of collision; note that "complete" commands will need to be updated with new aliases
-alias gp=_PATHS_GP
-alias sp=_PATHS_SP
-alias dp=_PATHS_DP
-alias pp=_PATHS_PP
+for _PATHS_FUNC in "${!_PATHS_FUNC_ALIASES[@]}"; do
+    alias ${_PATHS_FUNC_ALIASES[$_PATHS_FUNC]}=$_PATHS_FUNC
+done
+unset _PATHS_FUNC
 
 _PATHS_KEY_COMPLETIONS() {
     # completion words come from the keys of the associative array stored in the file below
@@ -106,25 +107,22 @@ _PATHS_GP_COMPLETION () {
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
             ;;
         -*)
-            COMPREPLY=($(compgen -W "${short_opts[*]}" -- "$partial_key"))
+            COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
             ;;
     esac
 
-    #rm tmp
     # figure out how many positional args we have
     local positional_arg_num=-1
     local arg
     local opt
-    local opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
+    declare -a opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
     for arg in "${COMP_WORDS[@]}"; do
         [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
         for opt in "${opts_with_arg[@]}"; do
             [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
         done
-        #echo $arg >> tmp
     done
 
-    #echo $positional_arg_num >> tmp
     # complete the positional arguments
     case $positional_arg_num in
         1)
@@ -133,7 +131,7 @@ _PATHS_GP_COMPLETION () {
             ;;
     esac
 }
-complete -F _PATHS_GP_COMPLETION gp
+complete -F _PATHS_GP_COMPLETION $_PATHS_FUNC_ALIASES[_PATHS_GP]
 
 _PATHS_DP_COMPLETION () {
     declare -a short_opts=(-h -ca -cf -cr -n)
@@ -145,14 +143,14 @@ _PATHS_DP_COMPLETION () {
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
             ;;
         -*)
-            COMPREPLY=($(compgen -W "${short_opts[*]}" -- "$partial_key"))
+            COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
             ;;
         *)
             _PATHS_KEY_COMPLETIONS
             ;;
     esac
 }
-complete -F _PATHS_DP_COMPLETION dp
+complete -F _PATHS_DP_COMPLETION $_PATHS_FUNC_ALIASES[_PATHS_DP]
 
 _PATHS_PP_COMPLETION () {
     declare -a short_opts=(-h -R -r -f)
@@ -164,18 +162,18 @@ _PATHS_PP_COMPLETION () {
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
             ;;
         -*)
-            COMPREPLY=($(compgen -W "${short_opts[*]}" -- "$partial_key"))
+            COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
             ;;
         *)
             _PATHS_KEY_COMPLETIONS
             ;;
     esac
 }
-complete -F _PATHS_PP_COMPLETION pp
+complete -F _PATHS_PP_COMPLETION $_PATHS_FUNC_ALIASES[_PATHS_PP]
 
 _PATHS_SP_COMPLETION () {
-    declare -a short_opts=(-b -f -p -r -h)
-    declare -a long_opts=(--bookmark --function --path --relative-to --help)
+    declare -a short_opts=(-b -f -p -r -n -h)
+    declare -a long_opts=(--bookmark --function --path --relative-to --no-confirm --help)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
     case "${COMP_WORDS[COMP_CWORD-1]}" in
@@ -193,30 +191,29 @@ _PATHS_SP_COMPLETION () {
             ;;
     esac
 
+    #set -x
     case "${COMP_WORDS[COMP_CWORD]}" in 
         --*)
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
             ;;
         -*)
-            COMPREPLY=($(compgen -W "${short_opts[*]}" -- "$partial_key"))
+            COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
             ;;
     esac
+    #set +x
 
-    #rm tmp
     # figure out how many positional args we have
     local positional_arg_num=-1
     local arg
     local opt
-    local opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
+    declare -a opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
     for arg in "${COMP_WORDS[@]}"; do
         [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
         for opt in "${opts_with_arg[@]}"; do
             [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
         done
-        #echo $arg >> tmp
     done
 
-    #echo $positional_arg_num >> tmp
     # complete the positional arguments
     case $positional_arg_num in
         2)
@@ -228,8 +225,9 @@ _PATHS_SP_COMPLETION () {
             _PATHS_KEY_COMPLETIONS
             ;;
     esac
+    #set +x
 }
-complete -F _PATHS_SP_COMPLETION sp
+complete -F _PATHS_SP_COMPLETION $_PATHS_FUNC_ALIASES[_PATHS_SP]
 
 # init path database if it does not exist
 if [[ ! -e "$_PATHS_PATH_DB_FILE" ]]; then
@@ -250,6 +248,7 @@ _PATHS_SP () {
     local func_def
     local func_name
     local path_specified=true
+    local no_confirm=false
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
@@ -269,6 +268,9 @@ _PATHS_SP () {
             shift
             func_name="$1"
             ;;
+        -n|--no-confirm)
+            no_confirm=true
+            ;;
         -h|--help)  # do help
             echo "Usage:"
             echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-f|--function <function_name>] [-p|--path <path>]"
@@ -284,6 +286,13 @@ _PATHS_SP () {
             echo "        - if a function is supplied, the <path> argument is ignored"
             echo "        - bookmarks are checked for validity at creation, except for function bookmarks"
             echo
+            echo "    Options:"
+            echo "        -b|--bookmark <arg>       name of the bookmark to create/update"
+            echo "        -f|--function <arg>       name of the function to use for this bookmark; the function definition is stored"
+            echo "        -p|--path <arg>           the path which the bookmark points to"
+            echo "        -r|--relative-to <arg>    the name of an existing bookmark with which this bookmark will be relative to"
+            echo "        -h|--help                 print this help"
+            echo
             echo "Bookmark types:"
             echo "    - absolute path: a fixed path that is fully resolved with realpath"
             echo "    - relative path: a partial path relative to any existing bookmark"
@@ -293,7 +302,7 @@ _PATHS_SP () {
             echo "Related aliases:"
             alias | awk '$0 ~ funcname {print "    " $0}' "funcname=$FUNCNAME"
             echo
-
+  
             return 0
             ;;
         [^-]*)  # pos1: bookmark name, pos2: path on disk
@@ -375,11 +384,6 @@ _PATHS_SP () {
         fi
 
         local resolved_path="$(realpath --relative-to "$(_PATHS_PP -R "$rel_bookmark_name")" "$path")"
-        # not yet sure how to check this path until _PATHS_PP resolves it
-        #if [[ ! -e "$resolved_path" ]]; then
-        #    echo "Error: path '$path' ($resolved_path) does not exist" >&2
-        #    return 1
-        #fi
 
         local name_len=${#rel_bookmark_name}
         resolved_path="r$name_len:$rel_bookmark_name$resolved_path"
@@ -399,6 +403,27 @@ _PATHS_SP () {
             echo "Error: path '$path' ($resolved_path) is not a directory" >&2
             return 1
         fi
+    fi
+
+    # check if there will an overwrite and handle it appropriately
+    if ! $no_confirm && [[ "$bookmark_name" != "$_PATHS_DEFAULT_BM_NAME" && "${path_db["$bookmark_name"]}" != ""  ]]; then
+        local ans
+        local ask=true
+        while $ask; do
+            read -p "would you like to overwite existing bookmark '$bookmark_name'? (y/n) " ans
+            ask=true
+            case "${ans,,}" in
+                y|yes)
+                    ask=false
+                    ans=true
+                    ;;
+                n|no)
+                    ask=false
+                    ans=false
+                    ;;
+            esac
+        done
+        $ans || { echo "save aborted"; return 0; }
     fi
 
     path_db["$bookmark_name"]="$resolved_path"
@@ -478,6 +503,10 @@ _PATHS_GP () {
             echo
             echo "    Key assumptions:"
             echo "        - if no bookmark name is specified, the default bookmark is used"
+            echo
+            echo "    Options:"
+            echo "        -b|--bookmark <arg>   name of the bookmark to cd to"
+            echo "        -h|--help             print this help"
             echo
             echo "Bookmark types:"
             echo "    - absolute path: a fixed path that is fully resolved with realpath"
@@ -583,6 +612,13 @@ _PATHS_DP () {
             echo "        - if no bookmark name is specified, do nothing"
             echo "        - supplied bookmarks are not globs or regular expressions, they must be exact matches"
             echo
+            echo "    Options:"
+            echo "        -ca|--clean-absolute      remove absolute bookmarks that do not resolve to an existing path"
+            echo "        -cf|--clean-functions     NOT YET IMPLEMENTED: clean up function-based bookarks"
+            echo "        -cr|--clean-relative      NOT YET IMPLEMENTED: clean up relative bookmarks that fail to resolve to an existing path"
+            echo "        -n|--no-confirm           do not ask for confirmation before removal"
+            echo "        -h|--help                 print this help"
+            echo
             echo "Bookmark types:"
             echo "    - absolute path: a fixed path that is fully resolved with realpath"
             echo "    - relative path: a partial path relative to any existing bookmark"
@@ -622,7 +658,7 @@ _PATHS_DP () {
                     local ask=true
                     while $ask; do
                         read -p "would you like to remove this bookmark? (y/n) " ans
-                        ask=false
+                        ask=true
                         case "${ans,,}" in
                             y|yes)
                                 ask=false
@@ -656,7 +692,7 @@ _PATHS_DP () {
             local ask=true
             while $ask; do
                 read -p "Would you like to remove '$bookmark' from your bookmarks? (y/n) " ans
-                ask=false
+                ask=true
                 case "${ans,,}" in
                     y|yes)
                         ask=false
@@ -707,10 +743,16 @@ _PATHS_PP () {
             echo
             echo "    Key assumptions:"
             echo "        - if no bookmark name is specified, print all stored paths"
-            echo "        - if one bookmark name is specified AND is an exact match, only the lookup value will be returned"
-            echo "        - exact (non-regex) match of <regex> is attempted first, so <regex> may need to be more explicit"
+            echo "        - regex matching for lookup is always used, except when specifying --exact-resolve or -R"
+            echo "        - accepts any quantity of bookmark name expressions, but must receive exactly one when doing an exact-resolve"
             echo "        - except when printing all stored paths, the user does not care to see the default bookmark in search"
             echo "            results unless it is directly named"
+            echo
+            echo "    Options:"
+            echo "        -r|--resolve          resolve results in the 'Bookmark Value' column to real paths on disk"
+            echo "        -R|--exact-resolve    resolve one bookmark, exactly named, to a path"
+            echo "        -f|--function-body    for function-yielded bookmarks, print the entire function; USE WITH -R or --exact-resolve"
+            echo "        -h|--help             print this help"
             echo
             echo "Bookmark types:"
             echo "    - absolute path: a fixed path that is fully resolved with realpath"
@@ -751,7 +793,7 @@ _PATHS_PP () {
             return 1
         else
             # what type of bookmark do we have?
-            printf -- "%s" "$(_PATHS_FORMAT_BM "$key" true false)"
+            printf -- "%s\n" "$(_PATHS_FORMAT_BM "$key" true $return_function_body)"
         fi
 
         return 0
@@ -780,11 +822,14 @@ _PATHS_PP () {
         # if one search term is supplied, no sep or header needed
             # else: each result set headed by "searching for <term>:\n"
 
-        # print key-value pairs using tab-separation piped to column
+        # print key-value pairs using tab-separation piped to column always -- assumption is regex search unless -R given
             # _PATHS_PP flag to opt for output truncation at terminal width or perform smarter wrapping (look into -W)
             # column is outdated on several actively used systems, so need to fall back to usage without "-L" or "-W" options
 
         # functions will only not be truncated when requested by the user
+
+    $return_function_body && echo Warning: ignoring option to return full function body: please resolve a single bookmark to use this feature >&2
+    return_function_body=false
 
     local tab_char
     printf -v tab_char "\t"
@@ -795,14 +840,12 @@ _PATHS_PP () {
 
             # print the default bookmark first
             printf -- "default (%s)\t%s\n" "$_PATHS_DEFAULT_BM_NAME" "$(_PATHS_FORMAT_BM "$_PATHS_DEFAULT_BM_NAME" $resolve $return_function_body)"
-            #printf -- "-----\n"
             echo
             unset "path_db[$_PATHS_DEFAULT_BM_NAME]"
 
             # print sorted bookmarks less the default
             local key
             for key in "${!path_db[@]}"; do
-                #echo resolve: $resolve >&2
                 printf -- "%s\t%s\n" "$key" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
             done | sort
         } | { column -t -s "$tab_char" -W2 -L 2>/dev/null || column -t -s "$tab_char"; }
@@ -810,13 +853,7 @@ _PATHS_PP () {
         return 0
     fi
 
-    # one argument plus exact match -> don't need special formatting or bookmark name in the output
-    local value="${path_db["$1"]}"
-    if [[ ${#@} -eq 1 && "$value" != "" ]]; then
-        local result="$(_PATHS_FORMAT_BM "$1" $resolve $return_function_body)"
-        printf -- "%s\n" "$result"
-        return 0
-    fi
+    ## one argument plus exact match -> don't need special formatting or bookmark name in the output
 
 
     local tab_char
@@ -826,21 +863,30 @@ _PATHS_PP () {
         printf -- "Search Expression\tMatched Bookmarks\tBookmark Value\n"
         printf -- "-----------------\t-----------------\t--------------\n"
         local arg
+        local exact
         for arg in "$@"; do
             printf -- "%s" "$arg"  # print the search expression
             {
                 local value="${path_db["$arg"]}"
-                if [[ "$value" != "" ]]; then
-                    # handle exact match
-                    local result="$(_PATHS_FORMAT_BM "$arg" $resolve $return_function_body)"
-                    printf -- "\t%s\t%s\n" "$arg (exact)" "$result"
-                else
                     # handle regex lookup here by iterating over the keys and regex testing each one
                     local key
                     for key in "${!path_db[@]}"; do
-                        [[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]] && printf -- "\t%s\t%s\n" "$key" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+                        #[[ "$key" == "$arg" ]] && exact=" (exact)" || exact=""
+                        #[[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]] && printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+
+                        local print_match=false
+                        if [[ "$key" == "$arg" ]]; then
+                            print_match=true
+                            exact=" (exact)"
+                        elif [[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]]; then
+                            print_match=true
+                            exact=""
+                        fi
+
+                        $print_match && printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+
+
                     done
-                fi
             } | sort  # sort each match group
         done
     } | { column -t -s "$tab_char" -W3 -L 2>/dev/null || column -t -s "$tab_char"; }
@@ -867,7 +913,7 @@ _PATHS_FORMAT_BM () {
                 local func_name="${BASH_REMATCH[2]::$len}"
                 local func_def="${BASH_REMATCH[2]:$len}"
 
-                if $resolve; then
+                if ! $return_function_body && $resolve; then
                     if ! result="$(eval "$func_def" && "$func_name")"; then
                         echo "Error: evaluation of function '$func_name' failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
                         return 1
@@ -931,3 +977,5 @@ _PATHS_FORMAT_BM () {
     esac
 }
 #set +x
+
+unset _PATHS_FUNC_ALIASES
