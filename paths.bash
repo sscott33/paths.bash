@@ -98,15 +98,18 @@ _PATHS_GP_COMPLETION () {
     case "${COMP_WORDS[COMP_CWORD-1]}" in
         -b|--bookmark)
             _PATHS_KEY_COMPLETIONS
+            return 0
             ;;
     esac
 
     case "${COMP_WORDS[COMP_CWORD]}" in 
         --*)
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
+            return 0
             ;;
         -*)
             COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
+            return 0
             ;;
     esac
 
@@ -178,24 +181,30 @@ _PATHS_SP_COMPLETION () {
     case "${COMP_WORDS[COMP_CWORD-1]}" in
         -b|--bookmark)
             _PATHS_KEY_COMPLETIONS
+            return 0
             ;;
         -f|--function)
             _PATHS_FUNC_COMPLETIONS
+            return 0
             ;;
         -p|--path)
             COMPREPLY=($(compgen -o dirnames -- "$partial_key"))
+            return 0
             ;;
         -r|--relative-to)
             _PATHS_KEY_COMPLETIONS
+            return 0
             ;;
     esac
 
     case "${COMP_WORDS[COMP_CWORD]}" in 
         --*)
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
+            return 0
             ;;
         -*)
             COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
+            return 0
             ;;
     esac
 
@@ -353,6 +362,27 @@ _PATHS_SP () {
         return 1
     fi
 
+    # check if there will an overwrite and handle it appropriately
+    if ! $no_confirm && [[ "$bookmark_name" != "$_PATHS_DEFAULT_BM_NAME" && "${path_db["$bookmark_name"]}" != ""  ]]; then
+        local ans
+        local ask=true
+        while $ask; do
+            read -p "would you like to overwite existing bookmark '$bookmark_name'? (y/n) " ans
+            ask=true
+            case "${ans,,}" in
+                y|yes)
+                    ask=false
+                    ans=true
+                    ;;
+                n|no)
+                    ask=false
+                    ans=false
+                    ;;
+            esac
+        done
+        $ans || { echo "save aborted"; return 0; }
+    fi
+
     # do we have a func?
     # do we have a relative?
     # is it an absolute?
@@ -402,27 +432,6 @@ _PATHS_SP () {
         fi
     fi
 
-    # check if there will an overwrite and handle it appropriately
-    if ! $no_confirm && [[ "$bookmark_name" != "$_PATHS_DEFAULT_BM_NAME" && "${path_db["$bookmark_name"]}" != ""  ]]; then
-        local ans
-        local ask=true
-        while $ask; do
-            read -p "would you like to overwite existing bookmark '$bookmark_name'? (y/n) " ans
-            ask=true
-            case "${ans,,}" in
-                y|yes)
-                    ask=false
-                    ans=true
-                    ;;
-                n|no)
-                    ask=false
-                    ans=false
-                    ;;
-            esac
-        done
-        $ans || { echo "save aborted"; return 0; }
-    fi
-
     path_db["$bookmark_name"]="$resolved_path"
     declare -p path_db > "$_PATHS_PATH_DB_FILE"
 
@@ -434,47 +443,6 @@ _PATHS_SP () {
 
     return 0
 
-    #####################
-    if [[ -n "$func_def" ]]; then
-        # update this for confirmation text
-        path="$func_name"
-        path_db["$bookmark_name"]="f:$func_name:$func_def"
-
-    elif [[ -n "$rel_bookmark_name" ]]; then
-        if [[ -z "${path_db["$bookmark_name"]}" ]]; then
-            echo "Error: $bookmark_name is not an existing bookmark" >&2
-            return 1
-        fi
-
-
-        if [[ ! -d "$path" ]]; then
-            echo "Error: '$path' does not exist or is not a directory" >&2
-            return 1
-        fi
-
-        path="$(realpath --relative-to "$(_PATHS_PP -R "$bookmark_name")" "$path")"
-
-        path_db["$rel_bookmark_name"]="r:$bookmark_name:$path"
-
-        # remove relevant prefixes
-        path="${path_db["$rel_bookmark_name"]:2}"
-
-    elif [[ -d "$path" ]]; then
-        path_db["$bookmark_name"]="a:$path"
-    else
-        echo "Error: '$path' does not exist or is not a directory" >&2
-        return 1
-    fi
-
-    # need to handle other cases here
-    bookmark_name="$rel_bookmark_name"
-    if [[ "$bookmark_name" != "$_PATHS_DEFAULT_BM_NAME" ]]; then
-        echo "saved path '$path' as '$bookmark_name'"
-    else
-        echo "saved path '$path'"
-    fi
-    # save database
-    declare -p path_db > "$_PATHS_PATH_DB_FILE"
 }
 
 #goto path
@@ -864,26 +832,29 @@ _PATHS_PP () {
         for arg in "$@"; do
             printf -- "%s" "$arg"  # print the search expression
             {
-                local value="${path_db["$arg"]}"
-                    # handle regex lookup here by iterating over the keys and regex testing each one
-                    local key
-                    for key in "${!path_db[@]}"; do
-                        #[[ "$key" == "$arg" ]] && exact=" (exact)" || exact=""
-                        #[[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]] && printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+                # handle regex lookup here by iterating over the keys and regex testing each one
+                local print_return=true
+                local key
+                for key in "${!path_db[@]}"; do
+                    #[[ "$key" == "$arg" ]] && exact=" (exact)" || exact=""
+                    #[[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]] && printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
 
-                        local print_match=false
-                        if [[ "$key" == "$arg" ]]; then
-                            print_match=true
-                            exact=" (exact)"
-                        elif [[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]]; then
-                            print_match=true
-                            exact=""
-                        fi
+                    local print_match=false
+                    if [[ "$key" == "$arg" ]]; then
+                        print_match=true
+                        exact=" (exact)"
+                    elif [[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]]; then
+                        print_match=true
+                        exact=""
+                    fi
 
-                        $print_match && printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+                    if $print_match; then
+                        print_return=false
+                        printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+                    fi
 
-
-                    done
+                done
+                $print_return && echo
             } | sort  # sort each match group
         done
     } | { column -t -s "$tab_char" -W3 -L 2>/dev/null || column -t -s "$tab_char"; }
