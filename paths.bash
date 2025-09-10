@@ -1,6 +1,6 @@
 # MIT License
 #
-# Copyright (c) 2022–2024 Samuel Odell Scott.
+# Copyright (c) 2022–2025 Samuel Odell Scott.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -233,6 +233,7 @@ _PATHS_SP_COMPLETION () {
     esac
 }
 complete -F _PATHS_SP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
+compopt -o nospace ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
 
 # init path database if it does not exist
 if [[ ! -e "$_PATHS_PATH_DB_FILE" ]]; then
@@ -279,7 +280,7 @@ _PATHS_SP () {
         -h|--help)  # do help
             echo "Usage:"
             echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-f|--function <function_name>] [-p|--path <path>] [-n|--no-confirm]"
-            echo "    ${FUNCNAME//[^[:space:]]/ } [-r|--relative-to <bookmark>] [-h|--help] [<bookmark_name>] [<path>]"
+            echo "    ${FUNCNAME//?/ } [-r|--relative-to <bookmark>] [-h|--help] [<bookmark_name>] [<path>]"
             echo
             echo "    This function creates a new bookmark. It can be used to modify existing bookmarks by overwriting them. Note"
             echo "    that between 0 and 2 positional arguments can be accepted. Both positional arguments can be specified with"
@@ -306,7 +307,7 @@ _PATHS_SP () {
             echo "        can be utilized directly or as the root for a relative path. This allows for dynamic bookmarks."
             echo
             echo "Related aliases:"
-            alias | awk '$0 ~ funcname {print "    " $0}' "funcname=$FUNCNAME"
+            alias | while read -r line; do [[ $line == *$FUNCNAME* ]] && echo "    $line"; done
             echo
   
             return 0
@@ -480,7 +481,7 @@ _PATHS_GP () {
             echo "        can be utilized directly or as the root for a relative path. This allows for dynamic bookmarks."
             echo
             echo "Related aliases:"
-            alias | awk '$0 ~ funcname {print "    " $0}' "funcname=$FUNCNAME"
+            alias | while read -r line; do [[ $line == *$FUNCNAME* ]] && echo "    $line"; done
             echo
             return 0
             ;;
@@ -567,7 +568,7 @@ _PATHS_DP () {
             # do help
             echo "Usage:"
             echo "    $FUNCNAME [-ca|--clean-absolute] [-cf|--clean-functions] [-cr|--clean-relative] [-n|--no-confirm]"
-            echo "    ${FUNCNAME//[^[:space:]]/ } [-h|--help] [<bookmark_name> ...]"
+            echo "    ${FUNCNAME//?/ } [-h|--help] [<bookmark_name> ...]"
             echo
             echo "    This function permanently removes bookmarks from the database. By default it will ask if you want to delete"
             echo "    each bookmark. There are various clean flags that will collect broken bookmarks for deletion. Multiple"
@@ -591,7 +592,7 @@ _PATHS_DP () {
             echo "        can be utilized directly or as the root for a relative path. This allows for dynamic bookmarks."
             echo
             echo "Related aliases:"
-            alias | awk '$0 ~ funcname {print "    " $0}' "funcname=$FUNCNAME"
+            alias | while read -r line; do [[ $line == *$FUNCNAME* ]] && echo "    $line"; done
             echo
             return 0
             ;;
@@ -726,7 +727,7 @@ _PATHS_PP () {
             echo "        can be utilized directly or as the root for a relative path. This allows for dynamic bookmarks."
             echo
             echo "Related aliases:"
-            alias | awk '$0 ~ funcname {print "    " $0}' "funcname=$FUNCNAME"
+            alias | while read -r line; do [[ $line == *$FUNCNAME* ]] && echo "    $line"; done
             echo
             return 0
             ;;
@@ -758,7 +759,13 @@ _PATHS_PP () {
             return 1
         else
             # what type of bookmark do we have?
-            printf -- "%s\n" "$(_PATHS_FORMAT_BM "$key" true $return_function_body)"
+            local value
+
+            if ! value=$(_PATHS_FORMAT_BM "$key" true $return_function_body); then
+                return 1
+            fi
+
+            printf -- "%s\n" "$value"
         fi
 
         return 0
@@ -811,7 +818,7 @@ _PATHS_PP () {
             # print sorted bookmarks less the default
             local key
             for key in "${!path_db[@]}"; do
-                printf -- "%s\t%s\n" "$key" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+                printf -- "%s\t%s\n" "$key" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body || echo "<error>")"
             done | sort
         } | { column -t -s "$tab_char" -W2 -L 2>/dev/null || column -t -s "$tab_char"; }
 
@@ -850,7 +857,7 @@ _PATHS_PP () {
 
                     if $print_match; then
                         print_return=false
-                        printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+                        printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body || echo "<error>")"
                     fi
 
                 done
@@ -926,7 +933,7 @@ _PATHS_FORMAT_BM () {
                         printf -- "%s" "$resolved_path"
                         return 0
                     else
-                        echo "Error: recursive lookup of bookmark '$value' failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+                        echo "Error: recursive lookup of bookmark '$bookmark_name' failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
                         return 1
                     fi
                 fi
@@ -942,6 +949,7 @@ _PATHS_FORMAT_BM () {
             ;;
         *)
             echo "Error: invalid bookmark value returned by key '$bookmark_name' (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+            return 1
     esac
 }
 
