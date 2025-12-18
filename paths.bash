@@ -49,6 +49,12 @@ _PATHS_KEY_COMPLETIONS() {
     local IFS=$'\n'
 
     # filter through keys based on currently completing word
+    # adding default bookmark to db since it doesn't exist there any more
+    local default_bm_name
+    local default_bm_value
+    default_bookmark_name=${state_db[default_bookmark_name]}
+    default_bookmark_value=${state_db[default_bookmark_value]}
+    path_db[$default_bookmark_name]=$default_bookmark_value
     # store the result in an array
     # must use * instead of @ for quoting to happen correctly
     local completions=($(compgen -W "${!path_db[*]}" "$partial_key"))
@@ -468,7 +474,7 @@ _PATHS_SP () {
         # construct the function bookmark and return early
         local name_len=${#func_name}
 
-        path_db["$bookmark_name"]="f${name_len}:$func_name$func_def"
+        path_db[$bookmark_name]=f${name_len}:$func_name$func_def
         _PATHS_SAVE_DB "${state_db[current_collection]}"
 
         echo "Saved function '$func_name' as '$bookmark_name'"
@@ -481,7 +487,7 @@ _PATHS_SP () {
         fi
 
         # does the relative parent bookmark exist?
-        if [[ -z "${path_db["$rel_bookmark_name"]}" ]]; then
+        if [[ -z ${path_db[$rel_bookmark_name]} ]]; then
             echo "Error: the bookmark '$rel_bookmark_name' does not exist" >&2
             return 1
         fi
@@ -491,7 +497,7 @@ _PATHS_SP () {
         local name_len=${#rel_bookmark_name}
         resolved_path="r$name_len:$rel_bookmark_name$resolved_path"
 
-        path_db["$bookmark_name"]="$resolved_path"
+        path_db[$bookmark_name]=$resolved_path
         _PATHS_SAVE_DB "${state_db[current_collection]}"
 
         echo "Saved '$path' as '$bookmark_name' relative to '$rel_bookmark_name'"
@@ -513,7 +519,7 @@ _PATHS_SP () {
         _PATHS_SAVE_STATE
         echo "Saved path '$path' as the default bookmark"
     else
-        path_db["$bookmark_name"]="$resolved_path"
+        path_db[$bookmark_name]=$resolved_path
         _PATHS_SAVE_DB "${state_db[current_collection]}"
         echo "Saved path '$path' as '$bookmark_name'"
     fi
@@ -586,7 +592,7 @@ _PATHS_GP () {
     fi
 
     # sanity check the name
-    path=${path_db["$bookmark_name"]}
+    path=${path_db[$bookmark_name]}
     if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
         path=${state_db[default_bookmark_value]}
     elif [[ -z "$path" ]]; then
@@ -696,9 +702,9 @@ _PATHS_DP () {
         # foreach bookmark, resolve and if result is nonexistent
         local bookmark
         for bookmark in "${!path_db[@]}"; do
-            if [[ "${path_db["$bookmark"]:0:1}" == "/" && ! -d "${path_db["$bookmark"]}" ]]; then
+            if [[ ${path_db[$bookmark]:0:1} == "/" && ! -d ${path_db[$bookmark]} ]]; then
                 echo -n "The path specified by '$bookmark' no longer exists or is not a directory, "
-                if [[ "$bookmark" == "${state_db[default_bookmark_name]}" ]]; then
+                if [[ $bookmark == "${state_db[default_bookmark_name]}" ]]; then
                     echo "it is also the default bookmark, skipping ..."
                     continue
                 fi
@@ -728,11 +734,11 @@ _PATHS_DP () {
     local retval=0
     local bookmark
     for bookmark in "$@"; do
-        if [[ -z "${path_db["$bookmark"]}" ]]; then
+        if [[ -z ${path_db[$bookmark]} ]]; then
             echo "Error: bookmark '$bookmark' not found" >&2
             return 1
         fi
-        if [[ "$bookmark" == "${state_db[default_bookmark_name]}" ]]; then
+        if [[ $bookmark == "${state_db[default_bookmark_name]}" ]]; then
             echo "Error: refusing to delete the default bookmark" >&2
             retval=2
             continue
@@ -842,7 +848,7 @@ _PATHS_PP () {
         if [[ $key == "${state_db[default_bookmark_name]}" ]]; then
             value=${state_db[default_bookmark_value]}
         else
-            value=${path_db["$key"]}
+            value=${path_db[$key]}
         fi
 
         # do we have an exact match?
@@ -973,7 +979,7 @@ _PATHS_FORMAT_BM () {
     if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
         value=${state_db[default_bookmark_value]}
     else
-        value=${path_db["$bookmark_name"]}
+        value=${path_db[$bookmark_name]}
     fi
     case "$value" in
         /*)
