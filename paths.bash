@@ -20,7 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
+export _PATHS_LIBRARY="$HOME/.path_bookmarks"
+export _PATHS_STATE_FILE="$_PATHS_LIBRARY/internal.state.sh"
+#export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
     # stored dictionary is path_db
 export _PATHS_DEFAULT_BM_NAME=_default
 
@@ -35,7 +37,9 @@ unset _PATHS_FUNC
 _PATHS_KEY_COMPLETIONS() {
     # completion words come from the keys of the associative array stored in the file below
     local path_db
-    . "$_PATHS_PATH_DB_FILE"
+    local state_db
+    eval "$(_PATHS_LOAD_STATE)"
+    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
 
     # get the currently completing word
     local partial_key=${COMP_WORDS[COMP_CWORD]}
@@ -236,18 +240,79 @@ complete -F _PATHS_SP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
 compopt -o nospace ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
 
 # init path database if it does not exist
-if [[ ! -e "$_PATHS_PATH_DB_FILE" ]]; then
-    declare -A path_db
-    path_db[$_PATHS_DEFAULT_BM_NAME]="$HOME"
-    declare -p path_db  > "$_PATHS_PATH_DB_FILE"
-    unset path_db
+if [[ ! -d $_PATHS_LIBRARY ]]; then
+    mkdir -p "$_PATHS_LIBRARY" || echo >&2 "Error: please make sure that the directory '$_PATHS_LIBRARY' exists or can be created"
 fi
+
+# running in a subshell to protect potential user variables "state_db" and "path_db"
+(
+    if [[ ! -e $_PATHS_STATE_FILE ]]; then
+        declare -gA state_db
+        state_db=(
+            [default_bookmark_name]=$_PATHS_DEFAULT_BM_NAME
+            [default_bookmark_value]=$HOME
+            [current_collection]=default
+        )
+        declare -p state_db > "$_PATHS_STATE_FILE"
+
+        collection_name=default
+        db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
+
+        if [[ ! -e $db_path ]]; then
+            declare -gA path_db
+            declare -p path_db > "$db_path"
+        fi
+    fi
+)
+unset _PATHS_DEFAULT_BM_NAME
+
+_PATHS_LOAD_STATE () {
+    cat "$_PATHS_STATE_FILE"
+}
+
+_PATHS_SAVE_STATE () {
+    declare -p state_db > "$_PATHS_STATE_FILE"
+}
+
+_PATHS_LOAD_DB () {
+    local collection_name
+    local db_path
+
+    collection_name=$1
+    #collection_name=${_PATHS_STATE_DB[collection_name]}
+    db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
+
+    if [[ ! -e $db_path ]]; then
+        echo >&2 "Error: cannot load collection '$collection_name', it does not exist in library (db_path = '$db_path')"
+        return 1
+    fi
+
+    cat "$db_path"
+}
+
+_PATHS_SAVE_DB () {
+    local collection_name
+    local db_path
+
+    collection_name=$1
+    #collection_name=${_PATHS_STATE_DB[collection_name]}
+    db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
+    
+    declare -p path_db > "$db_path"
+
+    if [[ ! -e $db_path ]]; then
+        echo >&2 "Warning: collection '$collection_name' created in libary (db_path = '$db_path')"
+    fi
+}
+
 
 # save path
 _PATHS_SP () {
     local path_db
+    local state_db
     # source database
-    . "$_PATHS_PATH_DB_FILE"
+    eval "$(_PATHS_LOAD_STATE)"
+    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
     local path
     local bookmark_name
     local rel_bookmark_name
@@ -339,7 +404,7 @@ _PATHS_SP () {
         if [[ -n "$1" ]]; then
             bookmark_name="$1"
         else
-            bookmark_name="$_PATHS_DEFAULT_BM_NAME"
+            bookmark_name="${state_db[default_bookmark_name]}"
         fi
     fi
 
@@ -364,7 +429,7 @@ _PATHS_SP () {
     fi
 
     # check if there will an overwrite and handle it appropriately
-    if ! $no_confirm && [[ "$bookmark_name" != "$_PATHS_DEFAULT_BM_NAME" && "${path_db["$bookmark_name"]}" != ""  ]]; then
+    if ! $no_confirm && [[ "$bookmark_name" != "${state_db[default_bookmark_name]}" && "${path_db["$bookmark_name"]}" != ""  ]]; then
         local ans
         local ask=true
         while $ask; do
@@ -388,6 +453,11 @@ _PATHS_SP () {
     # do we have a relative?
     # is it an absolute?
     if [[ -n "$func_name" ]]; then
+        if [[ "$bookmark_name" == "${state_db[default_bookmark_name]}" ]]; then
+            echo >&2 "Error: cannot use the default bookmark to store a function-based bookmark."
+            return 1
+        fi
+
         # get the function definition and make sure it was retrieved correctly
         func_def="$(declare -pf "$func_name")"
         if [[ -z "$func_def" || $? -ne 0 ]]; then
@@ -399,12 +469,17 @@ _PATHS_SP () {
         local name_len=${#func_name}
 
         path_db["$bookmark_name"]="f${name_len}:$func_name$func_def"
-        declare -p path_db > "$_PATHS_PATH_DB_FILE"
+        _PATHS_SAVE_DB "${state_db[current_collection]}"
 
         echo "Saved function '$func_name' as '$bookmark_name'"
         return 0
 
     elif [[ -n "$rel_bookmark_name" ]]; then
+        if [[ "$bookmark_name" == "${state_db[default_bookmark_name]}" ]]; then
+            echo >&2 "Error: cannot use the default bookmark to store a relative bookmark."
+            return 1
+        fi
+
         # does the relative parent bookmark exist?
         if [[ -z "${path_db["$rel_bookmark_name"]}" ]]; then
             echo "Error: the bookmark '$rel_bookmark_name' does not exist" >&2
@@ -417,7 +492,7 @@ _PATHS_SP () {
         resolved_path="r$name_len:$rel_bookmark_name$resolved_path"
 
         path_db["$bookmark_name"]="$resolved_path"
-        declare -p path_db > "$_PATHS_PATH_DB_FILE"
+        _PATHS_SAVE_DB "${state_db[current_collection]}"
 
         echo "Saved '$path' as '$bookmark_name' relative to '$rel_bookmark_name'"
         return 0
@@ -433,12 +508,13 @@ _PATHS_SP () {
         fi
     fi
 
-    path_db["$bookmark_name"]="$resolved_path"
-    declare -p path_db > "$_PATHS_PATH_DB_FILE"
-
-    if [[ "$bookmark_name" == "$_PATHS_DEFAULT_BM_NAME" ]]; then
+    if [[ "$bookmark_name" == "${state_db[default_bookmark_name]}" ]]; then
+        state_db[default_bookmark_value]="$resolved_path"
+        _PATHS_SAVE_STATE
         echo "Saved path '$path' as the default bookmark"
     else
+        path_db["$bookmark_name"]="$resolved_path"
+        _PATHS_SAVE_DB "${state_db[current_collection]}"
         echo "Saved path '$path' as '$bookmark_name'"
     fi
 
@@ -449,8 +525,10 @@ _PATHS_SP () {
 #goto path
 _PATHS_GP () {
     local path_db
+    local state_db
     # source database
-    . "$_PATHS_PATH_DB_FILE"
+    eval "$(_PATHS_LOAD_STATE)"
+    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
     local path
     local bookmark_name
 
@@ -503,41 +581,46 @@ _PATHS_GP () {
         if [[ -n "$1" ]]; then
             bookmark_name="$1"
         else
-            bookmark_name="$_PATHS_DEFAULT_BM_NAME"
+            bookmark_name="${state_db[default_bookmark_name]}"
         fi
     fi
 
     # sanity check the name
-    path="${path_db["$bookmark_name"]}"
-    if [[ -z "$path" ]]; then
+    path=${path_db["$bookmark_name"]}
+    if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
+        path=${state_db[default_bookmark_value]}
+    elif [[ -z "$path" ]]; then
         echo "Error: nonexistent bookmark '$bookmark_name" >&2
         return 1
     else
         if ! path="$(_PATHS_PP -R "$bookmark_name")"; then
             local retval=$?
-            echo "Error: path resolution failed; see previous errors"
+            echo >&2 "Error: path resolution failed; see previous errors"
             return $retval
         fi
     fi
 
     # make sure path exists
-    if [[ -e "$path" ]]; then
+    if [[ -d "$path" ]]; then
         cd "$path" && echo "working directory is now '$(pwd)'"
-        return $?
+        return 0
     else
-        echo "Error: destination does not exist; destination: '$path'" >&2
+        if [[ -e $path ]]; then
+            echo >&2 "Error: destination is not a directory; destination: '$path'"
+        else
+            echo "Error: destination does not exist; destination: '$path'" >&2
+        fi
         return 1
     fi
-
-
-    return 0
 }
 
 # delete path
 _PATHS_DP () {
     local path_db
+    local state_db
     # source database
-    . "$_PATHS_PATH_DB_FILE"
+    eval "$(_PATHS_LOAD_STATE)"
+    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
 
     local clean_absolute=false
     local clean_functions=false
@@ -615,7 +698,7 @@ _PATHS_DP () {
         for bookmark in "${!path_db[@]}"; do
             if [[ "${path_db["$bookmark"]:0:1}" == "/" && ! -d "${path_db["$bookmark"]}" ]]; then
                 echo -n "The path specified by '$bookmark' no longer exists or is not a directory, "
-                if [[ "$bookmark" == "$_PATHS_DEFAULT_BM_NAME" ]]; then
+                if [[ "$bookmark" == "${state_db[default_bookmark_name]}" ]]; then
                     echo "it is also the default bookmark, skipping ..."
                     continue
                 fi
@@ -642,14 +725,16 @@ _PATHS_DP () {
         done
     fi
 
+    local retval=0
     local bookmark
     for bookmark in "$@"; do
         if [[ -z "${path_db["$bookmark"]}" ]]; then
             echo "Error: bookmark '$bookmark' not found" >&2
             return 1
         fi
-        if [[ "$bookmark" == "$_PATHS_DEFAULT_BM_NAME" ]]; then
+        if [[ "$bookmark" == "${state_db[default_bookmark_name]}" ]]; then
             echo "Error: refusing to delete the default bookmark" >&2
+            retval=2
             continue
         fi
 
@@ -674,15 +759,17 @@ _PATHS_DP () {
         unset "path_db[$bookmark]"
     done
 
-    declare -p path_db > "${_PATHS_PATH_DB_FILE}"
-    return 0
+    _PATHS_SAVE_DB "${state_db[current_collection]}"
+    return $retval
 }
 
 # print paths
 _PATHS_PP () {
     local path_db
+    local state_db
     # source database
-    . "$_PATHS_PATH_DB_FILE"
+    eval "$(_PATHS_LOAD_STATE)"
+    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
 
     local resolve=false
     local exact_resolve=false
@@ -751,7 +838,12 @@ _PATHS_PP () {
         fi
 
         local key="$1"
-        local value="${path_db["$key"]}"
+        local value
+        if [[ $key == "${state_db[default_bookmark_name]}" ]]; then
+            value=${state_db[default_bookmark_value]}
+        else
+            value=${path_db["$key"]}
+        fi
 
         # do we have an exact match?
         if [[ "$value" == "" ]]; then
@@ -811,9 +903,9 @@ _PATHS_PP () {
             printf -- "-------------\t--------------\n"
 
             # print the default bookmark first
-            printf -- "default (%s)\t%s\n" "$_PATHS_DEFAULT_BM_NAME" "$(_PATHS_FORMAT_BM "$_PATHS_DEFAULT_BM_NAME" $resolve $return_function_body)"
+            printf -- "default (%s)\t%s\n" "${state_db[default_bookmark_name]}" "$(_PATHS_FORMAT_BM "${state_db[default_bookmark_name]}" $resolve $return_function_body)"
             echo
-            unset "path_db[$_PATHS_DEFAULT_BM_NAME]"
+            #unset "path_db[${state_db[default_bookmark_name]}]"
 
             # print sorted bookmarks less the default
             local key
@@ -842,15 +934,15 @@ _PATHS_PP () {
                 # handle regex lookup here by iterating over the keys and regex testing each one
                 local print_return=true
                 local key
-                for key in "${!path_db[@]}"; do
+                for key in "${!path_db[@]}" "${state_db[default_bookmark_name]}"; do
                     #[[ "$key" == "$arg" ]] && exact=" (exact)" || exact=""
-                    #[[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]] && printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
+                    #[[ "$key" != "${state_db[default_bookmark_name]}" && "$key" =~ $arg ]] && printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
 
                     local print_match=false
                     if [[ "$key" == "$arg" ]]; then
                         print_match=true
                         exact=" (exact)"
-                    elif [[ "$key" != "$_PATHS_DEFAULT_BM_NAME" && "$key" =~ $arg ]]; then
+                    elif [[ "$key" != "${state_db[default_bookmark_name]}" && "$key" =~ $arg ]]; then
                         print_match=true
                         exact=""
                     fi
@@ -873,9 +965,16 @@ _PATHS_FORMAT_BM () {
     local return_function_body="$3"
 
     local path_db
-    . "$_PATHS_PATH_DB_FILE"
+    local state_db
+    eval "$(_PATHS_LOAD_STATE)"
+    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
 
-    local value="${path_db["$bookmark_name"]}"
+    local value
+    if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
+        value=${state_db[default_bookmark_value]}
+    else
+        value=${path_db["$bookmark_name"]}
+    fi
     case "$value" in
         /*)
             printf -- "%s" "$value"
