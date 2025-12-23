@@ -26,7 +26,7 @@ export _PATHS_STATE_FILE="$_PATHS_LIBRARY/internal.state.sh"
     # stored dictionary is path_db
 export _PATHS_DEFAULT_BM_NAME=_default
 
-declare -A _PATHS_FUNC_ALIASES=([_PATHS_GP]="gp" [_PATHS_SP]="sp" [_PATHS_DP]="dp" [_PATHS_PP]="pp")
+declare -A _PATHS_FUNC_ALIASES=([_PATHS_GP]="gp" [_PATHS_SP]="sp" [_PATHS_DP]="dp" [_PATHS_PP]="pp" [_PATHS_ML]="ml")
 
 # allow for renaming the functions in case of collision; note that "complete" commands will need to be updated with new aliases
 for _PATHS_FUNC in "${!_PATHS_FUNC_ALIASES[@]}"; do
@@ -39,7 +39,20 @@ _PATHS_KEY_COMPLETIONS() {
     local path_db
     local state_db
     eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
+
+    local idx
+    local override
+    for idx in "${!COMP_WORDS[@]}"; do
+        case "${COMP_WORDS[idx]}" in
+            -c|--collection) override=${COMP_WORDS[idx+1]} ;;
+    esac
+
+    done
+    if [[ -n $override && -e $_PATHS_LIBRARY/$override.collection.sh ]]; then
+        eval "$(_PATHS_LOAD_DB "$override")"
+    else
+        eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
+    fi
 
     # get the currently completing word
     local partial_key=${COMP_WORDS[COMP_CWORD]}
@@ -99,15 +112,52 @@ _PATHS_FUNC_COMPLETIONS () {
     fi
 }
 
+_PATHS_COLLECTION_COMPLETIONS () {
+    # get the currently completing word
+    local partial_key=${COMP_WORDS[COMP_CWORD]}
+
+    # change IFS so that the completions can contain spaces
+    # using $-string to get actual newline character
+    local IFS=$'\n'
+
+    # retrieve a list of declared completions
+    declare -a completions=($_PATHS_LIBRARY/*.collection.sh)
+    local idx
+    for idx in "${!completions[@]}"; do
+        completions[idx]=${completions[idx]##*/}
+        completions[idx]=${completions[idx]%.collection.sh}
+    done
+
+    # filter through completions based on currently completing word
+    # store the result in an array
+    # must use * instead of @ for quoting to happen correctly
+    local completions=($(compgen -W "${completions[*]}" "$partial_key"))
+
+    # set COMPREPLY based on the available completions
+    if [[ ${#completions[@]} -eq 0 ]]; then
+        # set to an empty array if there are no possible completions
+        # cannot just use printf because of quoting
+        COMPREPLY=()
+    else
+        # copy array of completions to COMPREPLY (must use printf for spaces to be valid because IFS is newline)
+        # the '%q' preserves the completions in a format that can be reused as shell input & uses $-strings to handle escape chars
+        COMPREPLY=($(printf -- '%q\n' "${completions[@]}"))
+    fi
+}
+
 # add completion functionality to all functions except sp; not sure how to do completion based on argument position
 _PATHS_GP_COMPLETION () {
-    declare -a short_opts=(-h -b)
-    declare -a long_opts=(--help --bookmark)
+    declare -a short_opts=(-h -b -c)
+    declare -a long_opts=(--help --bookmark --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
     case "${COMP_WORDS[COMP_CWORD-1]}" in
         -b|--bookmark)
             _PATHS_KEY_COMPLETIONS
+            return 0
+            ;;
+        -c|--collection)
+            _PATHS_COLLECTION_COMPLETIONS
             return 0
             ;;
     esac
@@ -127,7 +177,7 @@ _PATHS_GP_COMPLETION () {
     local positional_arg_num=-1
     local arg
     local opt
-    declare -a opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
+    declare -a opts_with_arg=(-p --path -b --bookmark -c --collection)
     for arg in "${COMP_WORDS[@]}"; do
         [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
         for opt in "${opts_with_arg[@]}"; do
@@ -146,9 +196,16 @@ _PATHS_GP_COMPLETION () {
 complete -F _PATHS_GP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_GP]}
 
 _PATHS_DP_COMPLETION () {
-    declare -a short_opts=(-h -ca -cf -cr -n)
-    declare -a long_opts=(--help --clean-absolute --clean-functions --clean-relative --no-confirm)
+    declare -a short_opts=(-h -ca -cf -cr -n -c)
+    declare -a long_opts=(--help --clean-absolute --clean-functions --clean-relative --no-confirm --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
+
+    case "${COMP_WORDS[COMP_CWORD-1]}" in
+        -c|--collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+    esac
 
     case "${COMP_WORDS[COMP_CWORD]}" in 
         --*)
@@ -165,9 +222,16 @@ _PATHS_DP_COMPLETION () {
 complete -F _PATHS_DP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_DP]}
 
 _PATHS_PP_COMPLETION () {
-    declare -a short_opts=(-h -R -r -f)
-    declare -a long_opts=(--help --exact-resolve --resolve --function-body)
+    declare -a short_opts=(-h -R -r -f -c)
+    declare -a long_opts=(--help --exact-resolve --resolve --function-body --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
+
+    case "${COMP_WORDS[COMP_CWORD-1]}" in
+        -c|--collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+    esac
 
     case "${COMP_WORDS[COMP_CWORD]}" in 
         --*)
@@ -184,11 +248,15 @@ _PATHS_PP_COMPLETION () {
 complete -F _PATHS_PP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_PP]}
 
 _PATHS_SP_COMPLETION () {
-    declare -a short_opts=(-b -f -p -r -n -h)
-    declare -a long_opts=(--bookmark --function --path --relative-to --no-confirm --help)
+    declare -a short_opts=(-b -f -p -r -n -h -c)
+    declare -a long_opts=(--bookmark --function --path --relative-to --no-confirm --help --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
     case "${COMP_WORDS[COMP_CWORD-1]}" in
+        -c|--collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
         -b|--bookmark)
             _PATHS_KEY_COMPLETIONS
             return 0
@@ -245,6 +313,115 @@ _PATHS_SP_COMPLETION () {
 complete -F _PATHS_SP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
 compopt -o nospace ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
 
+_PATHS_ML_COMPLETION () {
+    declare -a short_opts=(-l -r -d -c -C -m -M -s -i -u -S -R -n -h)
+    declare -a long_opts=(--list-collections --rename-collection --delete-collection --create-collection
+        --copy-collection --merge-collections --merge-mode --subscribe-to-collection --inherit-collection
+        --update-subscription --shell-scope --reset-scope --no-confirm --help)
+
+    local partial_key="${COMP_WORDS[COMP_CWORD]}"
+
+    case "${COMP_WORDS[COMP_CWORD-3]}" in
+        -m|--merge-collections)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+    esac
+    case "${COMP_WORDS[COMP_CWORD-2]}" in
+        -C|--copy-collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+        -s|--subscribe-to-collection)
+            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            return 0
+            ;;
+        -r|--rename-collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+        -m|--merge-collections)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+        -i|--inherit-collection)
+            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            return 0
+            ;;
+    esac
+    case "${COMP_WORDS[COMP_CWORD-1]}" in
+        -C|--copy-collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+        -c|--create-collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+        -s|--subscribe-to-collection)
+            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            return 0
+            ;;
+        -u|--update-subscription)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+        -d|--delete-collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+        -r|--rename-collection)
+            _PATHS_COLLECTION_COMPLETIONS
+            return 0
+            ;;
+        -m|--merge-collections)
+            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            return 0
+            ;;
+        -i|--inherit-collection)
+            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            return 0
+            ;;
+        -M|--merge-mode)
+            declare -a modes
+            modes=(a ask r use-right l use-left)
+            COMPREPLY=($(compgen -W "${modes[*]}" -- "$partial_key"))
+            return 0
+    esac
+
+    case "${COMP_WORDS[COMP_CWORD]}" in 
+        --*)
+            COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
+            return 0
+            ;;
+        -*)
+            COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
+            return 0
+            ;;
+    esac
+
+    # figure out how many positional args we have
+    local positional_arg_num=-1
+    local arg
+    local opt
+    declare -a opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
+    for arg in "${COMP_WORDS[@]}"; do
+        [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
+        for opt in "${opts_with_arg[@]}"; do
+            [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
+        done
+    done
+
+    # complete the positional arguments
+    case $positional_arg_num in
+        1)
+            # offer existing bookmarks as options for the case of reassigning a bookmark
+            _PATHS_COLLECTION_COMPLETIONS
+            ;;
+    esac
+}
+complete -F _PATHS_ML_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_ML]}
+
 # init path database if it does not exist
 if [[ ! -d $_PATHS_LIBRARY ]]; then
     mkdir -p "$_PATHS_LIBRARY" || echo >&2 "Error: please make sure that the directory '$_PATHS_LIBRARY' exists or can be created"
@@ -273,6 +450,10 @@ fi
 unset _PATHS_DEFAULT_BM_NAME
 
 _PATHS_LOAD_STATE () {
+    if [[ ! -e $_PATHS_STATE_FILE ]]; then
+        echo >&2 "Error: path state file does not exist (state file = '$_PATHS_STATE_FILE')"
+        return 1
+    fi
     cat "$_PATHS_STATE_FILE"
 }
 
@@ -289,7 +470,7 @@ _PATHS_LOAD_DB () {
     db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
 
     if [[ ! -e $db_path ]]; then
-        echo >&2 "Error: cannot load collection '$collection_name', it does not exist in library (db_path = '$db_path')"
+        echo >&2 "Error: cannot load collection '$collection_name', it does not exist in library (collection path = '$db_path')"
         return 1
     fi
 
@@ -306,7 +487,7 @@ _PATHS_SAVE_DB () {
     
     declare -p path_db > "$db_path"
 
-    if [[ ! -e $db_path ]]; then
+    if [[ ! -v NO_WARN && ! -e $db_path ]]; then
         echo >&2 "Warning: collection '$collection_name' created in libary (db_path = '$db_path')"
     fi
 }
@@ -318,7 +499,7 @@ _PATHS_SP () {
     local state_db
     # source database
     eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
+    eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
     local path
     local bookmark_name
     local rel_bookmark_name
@@ -326,9 +507,15 @@ _PATHS_SP () {
     local func_name
     local path_specified=true
     local no_confirm=false
+    local OVERRIDE_COLLECTION
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
+        -c|--collection)
+            shift
+            eval "$(_PATHS_LOAD_DB "$1")"
+            OVERRIDE_COLLECTION=$1
+            ;;
         -p|--path)  # accepts one immediate argument, which is the path on disk the bookmark will point to
             shift
             path="$1"
@@ -351,7 +538,7 @@ _PATHS_SP () {
         -h|--help)  # do help
             echo "Usage:"
             echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-f|--function <function_name>] [-p|--path <path>] [-n|--no-confirm]"
-            echo "    ${FUNCNAME//?/ } [-r|--relative-to <bookmark>] [-h|--help] [<bookmark_name>] [<path>]"
+            echo "    ${FUNCNAME//?/ } [-r|--relative-to <bookmark>] [-c|--collection <collection>] [-h|--help] [<bookmark_name>] [<path>]"
             echo
             echo "    This function creates a new bookmark. It can be used to modify existing bookmarks by overwriting them. Note"
             echo "    that between 0 and 2 positional arguments can be accepted. Both positional arguments can be specified with"
@@ -365,6 +552,7 @@ _PATHS_SP () {
             echo
             echo "    Options:"
             echo "        -b|--bookmark <arg>       name of the bookmark to create/update"
+            echo "        -c|--collection <arg>     name of the collection to use for the duration of this command"
             echo "        -f|--function <arg>       name of the function to use for this bookmark; the function definition is stored"
             echo "        -p|--path <arg>           the path which the bookmark points to"
             echo "        -r|--relative-to <arg>    the name of an existing bookmark with which this bookmark will be relative to"
@@ -534,12 +722,18 @@ _PATHS_GP () {
     local state_db
     # source database
     eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
+    eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
     local path
     local bookmark_name
+    local OVERRIDE_COLLECTION
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
+        -c|--collection)
+            shift
+            eval "$(_PATHS_LOAD_DB "$1")"
+            OVERRIDE_COLLECTION=$1
+            ;;
         -b|--bookmark)
             shift
             bookmark_name="$1"
@@ -547,7 +741,7 @@ _PATHS_GP () {
         -h|--help)
             # do help
             echo "Usage:"
-            echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-h|--help] [<bookmark_name>]"
+            echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-c|--collection <collection>] [-h|--help] [<bookmark_name>]"
             echo
             echo "    This function changes the working directory to the location specified by the given bookmark."
             echo
@@ -555,8 +749,9 @@ _PATHS_GP () {
             echo "        - if no bookmark name is specified, the default bookmark is used"
             echo
             echo "    Options:"
-            echo "        -b|--bookmark <arg>   name of the bookmark to cd to"
-            echo "        -h|--help             print this help"
+            echo "        -b|--bookmark <arg>     name of the bookmark to cd to"
+            echo "        -c|--collection <arg>   name of the collection to use for the duration of this command"
+            echo "        -h|--help               print this help"
             echo
             echo "Bookmark types:"
             echo "    - absolute path: a fixed path that is fully resolved with realpath"
@@ -626,15 +821,21 @@ _PATHS_DP () {
     local state_db
     # source database
     eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
+    eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
 
     local clean_absolute=false
     local clean_functions=false
     local clean_relative=false
     local confirm=true
+    local OVERRIDE_COLLECTION
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
+        -c|--collection)
+            shift
+            eval "$(_PATHS_LOAD_DB "$1")"
+            OVERRIDE_COLLECTION=$1
+            ;;
         -ca|--clean-absolute)
             clean_absolute=true
             ;;
@@ -656,7 +857,7 @@ _PATHS_DP () {
         -h|--help)
             # do help
             echo "Usage:"
-            echo "    $FUNCNAME [-ca|--clean-absolute] [-cf|--clean-functions] [-cr|--clean-relative] [-n|--no-confirm]"
+            echo "    $FUNCNAME [-c|--collection <collection>] [-ca|--clean-absolute] [-cf|--clean-functions] [-cr|--clean-relative] [-n|--no-confirm]"
             echo "    ${FUNCNAME//?/ } [-h|--help] [<bookmark_name> ...]"
             echo
             echo "    This function permanently removes bookmarks from the database. By default it will ask if you want to delete"
@@ -668,6 +869,7 @@ _PATHS_DP () {
             echo "        - supplied bookmarks are not globs or regular expressions, they must be exact matches"
             echo
             echo "    Options:"
+            echo "        -c|--collection <arg>     name of the collection to use for the duration of this command"
             echo "        -ca|--clean-absolute      remove absolute bookmarks that do not resolve to an existing path"
             echo "        -cf|--clean-functions     NOT YET IMPLEMENTED: clean up function-based bookarks"
             echo "        -cr|--clean-relative      NOT YET IMPLEMENTED: clean up relative bookmarks that fail to resolve to an existing path"
@@ -775,14 +977,20 @@ _PATHS_PP () {
     local state_db
     # source database
     eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
+    eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
 
     local resolve=false
     local exact_resolve=false
     local return_function_body=false
+    local OVERRIDE_COLLECTION
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
+        -c|--collection)
+            shift
+            eval "$(_PATHS_LOAD_DB "$1")"
+            OVERRIDE_COLLECTION=$1
+            ;;
         -R|--exact-resolve)
             exact_resolve=true
             ;;
@@ -795,7 +1003,7 @@ _PATHS_PP () {
         -h|--help)
             # do help
             echo "Usage:"
-            echo "    $FUNCNAME [-R|--exact-resolve] [-r|--resolve] [-f|--function-body] [-h|--help] [<regex> ...]"
+            echo "    $FUNCNAME [-c|--collection <collection>] [-R|--exact-resolve] [-r|--resolve] [-f|--function-body] [-h|--help] [<regex> ...]"
             echo
             echo "    This function prints existing bookmarks. It can print all bookmarks or a subset specified by the supplied"
             echo "    regular expressions."
@@ -808,10 +1016,11 @@ _PATHS_PP () {
             echo "            results unless it is directly named"
             echo
             echo "    Options:"
-            echo "        -r|--resolve          resolve results in the 'Bookmark Value' column to real paths on disk"
-            echo "        -R|--exact-resolve    resolve one bookmark, exactly named, to a path"
-            echo "        -f|--function-body    for function-yielded bookmarks, print the entire function; USE WITH -R or --exact-resolve"
-            echo "        -h|--help             print this help"
+            echo "        -c|--collection <arg>  name of the collection to use for the duration of this command"
+            echo "        -f|--function-body     for function-yielded bookmarks, print the entire function; USE WITH -R or --exact-resolve"
+            echo "        -r|--resolve           resolve results in the 'Bookmark Value' column to real paths on disk"
+            echo "        -R|--exact-resolve     resolve one bookmark, exactly named, to a path"
+            echo "        -h|--help              print this help"
             echo
             echo "Bookmark types:"
             echo "    - absolute path: a fixed path that is fully resolved with realpath"
@@ -901,6 +1110,11 @@ _PATHS_PP () {
     $return_function_body && echo Warning: ignoring option to return full function body: please resolve a single bookmark to use this feature >&2
     return_function_body=false
 
+    local collection
+    collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
+    [[ -n $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
+    printf -- "Current Collection: %s\n\n" "$collection"
+
     local tab_char
     printf -v tab_char "\t"
     if [[ ${#@} -eq 0 ]] ; then  # print all
@@ -969,11 +1183,15 @@ _PATHS_FORMAT_BM () {
     local bookmark_name="$1"
     local resolve="$2"
     local return_function_body="$3"
+    local collection
+
+    collection=$_PATHS_CURRENT_COLLECTION
+    [[ -z $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
 
     local path_db
     local state_db
     eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${state_db[current_collection]}")"
+    eval "$(_PATHS_LOAD_DB "${collection:-${state_db[current_collection]}}")"
 
     local value
     if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
@@ -1056,6 +1274,513 @@ _PATHS_FORMAT_BM () {
             echo "Error: invalid bookmark value returned by key '$bookmark_name' (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
             return 1
     esac
+}
+
+_PATHS_ML () {
+    declare -A path_db
+    declare -A state_db
+    eval "$(_PATHS_LOAD_STATE)"
+
+    local confirm=true
+
+    local management_modes=""
+
+
+    # merge modes: use-left, use-right, ask
+    local merge_mode=ask
+    # scope options for current collection: system, shell
+    local current_scope=system
+    local reset_scope=false
+    local arg
+    local check_args=$'arg=${management_modes:(-1)}; (( $# >= ${argc[arg]} + 1 )) || { echo >&2 "Error: \'$1\' requires ${argc[arg]} arg(s)"; return 1; }'
+    declare -i argc
+
+    declare -a management_args
+    declare -a positional_opts
+    while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
+        -l|--list-collections)
+            management_modes+=l
+            ;;
+        -r|--rename-collection)
+            argc[r]=2
+            management_modes+=r
+            eval "$check_args"
+            management_args+=("$2" "$3")
+            shift ${argc[arg]}
+            ;;
+        -d|--delete-collection)
+            argc[d]=1
+            management_modes+=d
+            eval "$check_args"
+            management_args+=("$2")
+            shift ${argc[arg]}
+            ;;
+        -c|--create-collection)
+            argc[c]=1
+            management_modes+=c
+            eval "$check_args"
+            management_args+=("$2")
+            shift ${argc[arg]}
+            ;;
+        -C|--copy-collection)
+            argc[C]=2
+            management_modes+=C
+            eval "$check_args"
+            management_args+=("$2" "$3")
+            shift ${argc[arg]}
+            ;;
+        -m|--merge-collections)
+            argc[m]=3
+            management_modes+=m
+            eval "$check_args"
+            management_args+=("$2" "$3" "$4")
+            shift ${argc[arg]}
+            ;;
+        -M|--merge-mode)
+            argc[M]=2
+            merge_mode=$2
+            (( $# >= ${argc[M]} + 1 )) || { echo >&2 "Error: \'$1\' requires ${argc[M]} arg(s)"; return 1; }
+            case "$merge_mode" in
+                [alr]|ask|use-left|use-right) ;;
+                *)
+                    echo >&2 "Error: merge mode '$merge_mode' is invalid"
+                    return 1
+                    ;;
+            esac
+            shift ${argc[M]}
+            ;;
+        -s|--subscribe-to-collection)
+            argc[s]=2
+            management_modes+=s
+            eval "$check_args"
+            management_args+=("$2" "$3")
+            shift ${argc[arg]}
+            ;;
+        -i|--inherit-collection)
+            argc[i]=2
+            management_modes+=i
+            eval "$check_args"
+            management_args+=("$2" "$3")
+            shift ${argc[arg]}
+            ;;
+        -u|--update-subscription)
+            argc[u]=1
+            management_modes+=u
+            eval "$check_args"
+            management_args+=("$2")
+            shift ${argc[arg]}
+            ;;
+        -S|--shell-scope)
+            current_scope=shell
+            ;;
+        -R|--reset-scope)
+            current_scope=system
+            reset_scope=true
+            ;;
+        -n|--no-confirm)
+            confirm=false
+            ;;
+        -h|--help)
+            # do help
+            echo "Usage:"
+            echo "    $FUNCNAME [<collection_name>] [-h|--help] [-c|--create-collection <collection_name>] [-d|--delete-collection <collection_name>]"
+            echo "    ${FUNCNAME//?/ } [-r|--rename-collection <original_name> <new_name>] [-C|--copy-collection <original_name> <new_name>]"
+            echo "    ${FUNCNAME//?/ } [-m|--merge-collections <new_collection> <left_collection> <right_collection>] [-M|--merge-mode <mode>]"
+            echo "    ${FUNCNAME//?/ } [-i|--inherit-collection <new_collection> <source_collection_path>]"
+            echo "    ${FUNCNAME//?/ } [-s|--subscribe-to-collection <new_collection> <source_collection_path>] [-u|--update-subscription <collection_name>]"
+            echo "    ${FUNCNAME//?/ } [-u|--update-subscription <collection_name>] [-l|--list-collections] [-S|--shell-scope]"
+            echo "    ${FUNCNAME//?/ } [-R|--reset-scope] [-n|--no-confirm]"
+            echo
+            echo "    This function is used to manage the library of path bookmark collections. To manage bookmarks in a specific collection, see"
+            echo "    the PATHS_PP help text. It can temporarily set a different working collection for the current shell instance, subscribe to"
+            echo "    collections from other users*, and do various operations on the set of collections to rename, delete, and merge them. Multiple"
+            echo "    operations can be chained in a single call, and the set of collections can be listed between operations."
+            echo
+            echo "    Positional arguments:"
+            echo "        collection_name  this collection will be the new working collection for subsequent paths.bash function calls"
+            echo "        <none>           if no arguments of any kind are specified, the default behavior is that of -l"
+            echo
+            echo "    Options:"
+            echo "        -c|--create-collection    creates an empty path bookmark collection"
+            echo "        -C|--copy-collection      copies an existing collection into a new collection"
+            echo "        -d|--delete-collection    delete a collection"
+            echo "        -i|--inherit-collection   live-subscribes to an external (other user) collection via symlink"
+            echo "        -l|--list-collections     lists all of the collections in the user's library"
+            echo "        -m|--merge-collections    this can be used to merge two collections into a new collection"
+            echo "        -M|--merge-mode           this specifies the merge function's conflict resolution strategy; available"
+            echo "                                      options are: 'ask', 'use-left', or 'use-right' (abbreviated as 'a', 'l', and 'r')"
+            echo "        -n|--no-confirm           for select dangerous options, this short-circuits the y/n prompts to yes"
+            echo "        -r|--rename-collection    rename a collection"
+            echo "        -R|--reset-scope          cancels the effects of -S in the current shell"
+            echo "        -s|--subscribe-to-collection"
+            echo "                                  subscribes to a collection with manual update frequency; the collection is copied"
+            echo "                                      at time of subscription and can be updated using -u"
+            echo "        -S|--shell-scope          when used with the 'collection_name' positional, this sets the working collection"
+            echo "                                      for the current shell; undo with -R"
+            echo "        -u|--update-subscription  update a subscription created with -s; copies a new version of the collection"
+            echo "                                      into the user's library"
+            echo "        -h|--help                 display this help"
+            echo
+            echo "Collection types:"
+            echo "    normal/self   these are created and managed by you and are not subscriptions"
+            echo "    inherited     these are symlinked to another user's collection and live-update"
+            echo "    subscribed    these are copied at creation into the user's library and can be updated at manual intervals"
+            echo
+            echo "*"
+            echo "The core functionality of this script relies on sourcing *.collection.sh files, which are BASH scripts. If you"
+            echo "do not trust the other users on your system, do not use the subscription features. It is worth noting that while"
+            echo "malicious collection files are a novel attack vector, they are a simple and highly-exploitable one. PROCEED WITH"
+            echo "CAUTION."
+            echo 
+            echo "Related aliases:"
+            alias | while read -r line; do [[ $line == *$FUNCNAME* ]] && echo "    $line"; done
+            echo
+            return 0
+            ;;
+        [^-]*)
+            positional_opts+=("$1")
+            ;;
+    esac; shift; done
+    if [[ $1 == '--' ]]; then shift; fi
+
+    if [[ ${#positional_opts[@]} -gt 0 ]]; then
+        set -- "${positional_opts[@]}" "$@"
+    fi
+
+    # swapping current collection should be done as default behavior for positional arg
+    local current_collection
+    current_collection=$1
+
+    # if no operation specified, list collections
+    if [[ ${#management_modes} -eq 0 && -z $current_collection ]]; then
+        management_modes+=l
+    fi
+
+    local tab_char
+    printf -v tab_char "\t"
+
+    local current_mode
+    local drop_count
+    while (( ${#management_modes} > 0 )); do
+        drop_count=0
+        current_mode=${management_modes:0:1}
+        management_modes=${management_modes:1}
+        case $current_mode in
+            l)
+                printf -- "Library:            %s\n" "$(realpath -e "$_PATHS_LIBRARY" || echo "<error: realpath failed for \$_PATHS_LIBRARY>")"
+                local collection
+                collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
+                printf -- "Current collection: %s\n" "$collection"
+                echo
+                {
+                    printf -- "Collection Name\tCollection Path\n"  # table headers
+                    printf -- "---------------\t---------------\n"
+                    local collection
+                    local name
+                    for collection in "$_PATHS_LIBRARY"/*.collection.sh; do
+                        name=${collection##*/}
+                        name=${name%.collection.sh}
+                        printf -- "%s\t%s\n" "$name" "$(realpath -e "$collection" || echo "$collection <error: realpath failed; broken link?>")"; 
+                    done
+                } | { column -t -s "$tab_char" -W2 -L 2>/dev/null || column -t -s "$tab_char"; }
+                ;;
+            d)
+                local name
+                name=$management_args
+                drop_count=${argc[u]}
+
+                local path
+                path=$_PATHS_LIBRARY/$name.collection.sh
+
+                if [[ ! -e $path ]]; then
+                    echo >&2 "Error: collection '$name' does not exist (collection path = '$path')"
+                    return 1
+                fi
+
+                if $confirm; then
+                    local ans
+                    local ask=true
+                    while $ask; do
+                        read -p "rm: would you like to delete collection '$name'? (y/n) " ans
+                        ask=true
+                        case "${ans,,}" in
+                            y|yes)
+                                ask=false
+                                ans=true
+                                ;;
+                            n|no)
+                                ask=false
+                                ans=false
+                                ;;
+                        esac
+                    done
+                    $ans || { management_args=("${management_args[@]:drop_count}"); continue; }
+                else
+                    echo >&2 "Warning: collection '$name' will be deleted"
+                fi
+
+                rm -f "$path"
+
+                if [[ $name == "${state_db[current_collection]}" ]]; then
+                    echo >&2 "Warning: collection '$name' was the current collection; please set a new current collection"
+                fi
+                ;;
+            r|C)
+                local cmd
+                case $current_mode in
+                    r) cmd=mv ;;
+                    C) cmd=cp ;;
+                esac
+
+                local orig_name
+                local new_name
+                drop_count=${argc[$current_mode]}
+
+                orig_name=${management_args[0]}
+                new_name=${management_args[1]}
+
+                local orig_path
+                local new_path
+
+                orig_path=$_PATHS_LIBRARY/$orig_name.collection.sh
+                new_path=$_PATHS_LIBRARY/$new_name.collection.sh
+                
+                if [[ ! -e $orig_path ]]; then
+                    echo >&2 "Error: collection '$orig_name' does not exist"
+                    return 1
+                fi
+
+                local operation
+                case $cmd in
+                    mv) operation=rename ;;
+                    cp) operation=copy ;;
+                esac
+                if [[ -e $new_path ]]; then
+                    if $confirm; then
+                        local ans
+                        local ask=true
+                        while $ask; do
+                            read -p "$operation: would you like to overwite existing collection '$new_name'? (y/n) " ans
+                            ask=true
+                            case "${ans,,}" in
+                                y|yes)
+                                    ask=false
+                                    ans=true
+                                    ;;
+                                n|no)
+                                    ask=false
+                                    ans=false
+                                    ;;
+                            esac
+                        done
+                        $ans || { management_args=("${management_args[@]:drop_count}"); continue; }
+                    else
+                        echo >&2 "Warning: collection '$new_name' will be overwritten"
+                    fi
+                fi
+
+                $cmd -f "$orig_path" "$new_path"
+
+                if [[ $cmd == mv && $orig_name == "${state_db[current_collection]}" ]]; then
+                    state_db[current_collection]=$new_name
+                    _PATHS_SAVE_STATE
+                    echo >&2 "Warning: current collection was '$orig_name' and is now '$new_name'"
+                fi
+                ;;
+            c)
+                local name
+                name=$management_args
+                drop_count=${argc[c]}
+
+                local path
+                path=$_PATHS_LIBRARY/$name.collection.sh
+                if [[ -e $path ]]; then
+                    echo >&2 "Error: cannot create collection '$name' because it already exists ($path)"
+                    return 1
+                fi
+                NO_WARN=1 _PATHS_SAVE_DB "$name"
+                ;;
+            m)
+                local left_coll
+                local right_coll
+                local new_coll
+                drop_count=${argc[m]}
+
+                new_coll=${management_args[0]}
+                left_coll=${management_args[1]}
+                right_coll=${management_args[2]}
+
+                local new_coll_path
+                local left_coll_path
+                local right_coll_path
+
+                new_coll_path=$_PATHS_LIBRARY/$new_coll.collection.sh
+                left_coll_path=$_PATHS_LIBRARY/$left_coll.collection.sh
+                right_coll_path=$_PATHS_LIBRARY/$right_coll.collection.sh
+                
+                local error=false
+                if [[ -e $new_coll_path ]]; then
+                    echo >&2 "Error: collection '$new_coll' exists"
+                    error=true
+                fi
+                if [[ ! -e $left_coll_path ]]; then
+                    echo >&2 "Error: collection '$left_coll' does not exist"
+                    error=true
+                fi
+
+                if [[ ! -e $right_coll_path ]]; then
+                    echo >&2 "Error: collection '$right_coll' does not exist"
+                    error=true
+                fi
+
+                $error && return 1
+
+                declare -A left_db
+                declare -A right_db
+                declare -A new_db
+
+                _PATHS_LOAD_DB $left_coll
+                left_db=("${path_db[@]}")
+
+                _PATHS_LOAD_DB $right_coll
+                right_db=("${path_db[@]}")
+
+                # input validated, so this matching is safe
+                case $merge_mode in
+                    a*)
+                        local bm
+                        declare -A bm_ocurrences
+                        for bm in "${!left_db[@]}" "${!right_db[@]}"; do
+                            (( $bm_ocurrences[$bm]++ ))
+                        done
+
+                        local left_bm
+                        local right_bm
+                        for bm in "${!bm_ocurrences[@]}"; do
+                            if (( ${bm_ocurrences[$bm]} == 2 )); then
+                                # ask
+                                local ans
+                                local ask=true
+                                while $ask; do
+                                    read -p "merge: for bookmark '$bm', pick value from '$left_coll' (left) or '$right_coll' (right)? (l/r) " ans
+                                    ask=true
+                                    case "${ans,,}" in
+                                        l|left)
+                                            ask=false
+                                            ans=left_bm
+                                            ;;
+                                        r|right)
+                                            ask=false
+                                            ans=right_bm
+                                            ;;
+                                    esac
+                                done
+                                left_bm=${left_db[$bm]}
+                                right_bm=${right_db[$bm]}
+                                new_db[$bm]=${!ans}
+                            else
+                                left_bm=${left_db[$bm]}
+                                right_bm=${right_db[$bm]}
+                                new_db[$bm]=${left_bm:-$right_bm}
+                            fi
+                        done
+                        ;;
+                    *l*)
+                        right_db+=("${left_db[@]}")
+                        new_db=("${right_db[@]}")
+                        ;;
+                    *r*)
+                        left_db+=("${right_db[@]}")
+                        new_db=("${left_db[@]}")
+                        ;;
+                esac
+                path_db=("${new_db[@]}")
+                ;;
+            i|s|u)
+                local name
+                local path
+
+                name=${management_args[0]}
+
+                if [[ $current_mode == u ]]; then
+                    if ! path="$(realpath -e "$_PATHS_LIBRARY/$name.collection.sh.src")"; then
+                        echo >&2  "Error: failed to resolve link to original collection for '$name'"
+                        return 1
+                    fi
+                else
+                    path=${management_args[1]}
+                fi
+
+                drop_count=${argc[$current_mode]}
+
+                if ! path="$(realpath -e "$path")"; then
+                    echo >&2 "Error: cannot find source collection at '$path' (it does not exist or is not readable)"
+                    return 1
+                fi
+
+                local inheritance_name
+                inheritance_name=${path##*/}
+                inheritance_name=${inheritance_name%.collection.sh}
+
+                if [[ $path != */${inheritance_name}.collection.sh || ! -f $path ]]; then
+                    echo >&2 "Error: input collection file does not look like a collection of path bookmarks"
+                    return 1
+                fi
+
+                local dst_path
+                dst_path=$_PATHS_LIBRARY/$name.collection.sh
+                if [[ -e $dst_path ]]; then
+                    echo >&2 "Error: collection '$name' already exists ($dst_path)"
+                    return 1
+                fi
+
+                case $current_mode in
+                    i)
+                        if ! ( \cd "$_PATHS_LIBRARY" && ln -s -T "$path" "${dst_path##*/}"; ); then
+                            echo >&2 "Error: failed to create link for new collection '$name'"
+                            return 1
+                        fi
+                        ;;
+                    s|u)
+                        if ! cp "$path" "$dst_path"; then
+                            echo >&2 "Error: failed to produce facsimile of collection located at '$path'"
+                            return 1
+                        fi
+                        if ! ( \cd "$_PATHS_LIBRARY" && ln -f -s -T "$path" "${dst_path##*/}.src"; ); then
+                            echo >&2 "Error: failed to create link for source of collection '$name'"
+                            return 1
+                        fi
+                        ;;
+                esac
+                echo "inherit: added collection '$inheritance_name' at '$path' as '$name'"
+                ;;
+        esac
+
+        management_args=("${management_args[@]:drop_count}")
+    done
+    # if positional argument specified, switch to that collection, if possible; doing this last
+    if [[ ! -z $current_collection && $current_collection != "${state_db[current_collection]}" ]]; then
+        local path
+        path=$_PATHS_LIBRARY/$current_collection.collection.sh
+        if [[ ! -e $path ]]; then
+            echo >&2 "Error: cannot set current collection to '$current_collection'; collection does not exist (path = '$path')"
+            return 1
+        fi
+
+        $reset_scope && unset _PATHS_CURRENT_COLLECTION
+
+        case $current_scope in
+            system) 
+                state_db[current_collection]=$current_collection
+                _PATHS_SAVE_STATE || return 1
+                ;;
+            shell)
+                export _PATHS_CURRENT_COLLECTION="$current_collection"
+                ;;
+        esac
+        echo "set '$current_collection' as the current collection"
+    fi
+
 }
 
 unset _PATHS_FUNC_ALIASES
