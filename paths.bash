@@ -20,19 +20,97 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# BEGIN USER CUSTOMIZATIONS ############################################################################################
 export _PATHS_LIBRARY="$HOME/.path_bookmarks"
-export _PATHS_STATE_FILE="$_PATHS_LIBRARY/internal.state.sh"
-#export _PATHS_PATH_DB_FILE="$HOME/.path_db.bash"
-    # stored dictionary is path_db
 export _PATHS_DEFAULT_BM_NAME=_default
-
 declare -A _PATHS_FUNC_ALIASES=([_PATHS_GP]="gp" [_PATHS_SP]="sp" [_PATHS_DP]="dp" [_PATHS_PP]="pp" [_PATHS_ML]="ml")
+# END USER CUSTOMIZATIONS ##############################################################################################
+
+export _PATHS_STATE_FILE="$_PATHS_LIBRARY/internal.state.sh"
 
 # allow for renaming the functions in case of collision; note that "complete" commands will need to be updated with new aliases
 for _PATHS_FUNC in "${!_PATHS_FUNC_ALIASES[@]}"; do
     alias ${_PATHS_FUNC_ALIASES[$_PATHS_FUNC]}=$_PATHS_FUNC
 done
 unset _PATHS_FUNC
+
+# init path database if it does not exist
+if [[ ! -d $_PATHS_LIBRARY ]]; then
+    mkdir -p "$_PATHS_LIBRARY" || echo >&2 "Error: please make sure that the directory '$_PATHS_LIBRARY' exists or can be created"
+fi
+
+# running in a subshell to protect potential user variables "state_db" and "path_db"
+(
+    if [[ ! -e $_PATHS_STATE_FILE ]]; then
+        declare -gA state_db
+        state_db=(
+            [default_bookmark_name]=$_PATHS_DEFAULT_BM_NAME
+            [default_bookmark_value]=$HOME
+            [current_collection]=default
+        )
+
+        declare -p state_db > "$_PATHS_STATE_FILE"
+
+        collection_name=default
+        db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
+
+        if [[ ! -e $db_path ]]; then
+            declare -gA path_db
+            declare -p path_db > "$db_path"
+        fi
+    fi
+
+    # handle case where the user is updating the default bookmark name after initialization
+    . "$_PATHS_STATE_FILE"
+    if [[ ${state_db[default_bookmark_name]} != "$_PATHS_DEFAULT_BM_NAME" ]]; then
+        state_db[default_bookmark_name]=$_PATHS_DEFAULT_BM_NAME
+        declare -p state_db > "$_PATHS_STATE_FILE"
+    fi
+)
+unset _PATHS_DEFAULT_BM_NAME
+
+_PATHS_LOAD_STATE () {
+    if [[ ! -e $_PATHS_STATE_FILE ]]; then
+        echo >&2 "Error: path state file does not exist (state file = '$_PATHS_STATE_FILE')"
+        return 1
+    fi
+    cat "$_PATHS_STATE_FILE"
+}
+
+_PATHS_SAVE_STATE () {
+    declare -p state_db > "$_PATHS_STATE_FILE"
+}
+
+_PATHS_LOAD_DB () {
+    local collection_name
+    local db_path
+
+    collection_name=$1
+    #collection_name=${_PATHS_STATE_DB[collection_name]}
+    db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
+
+    if [[ ! -e $db_path ]]; then
+        echo >&2 "Error: cannot load collection '$collection_name', it does not exist in library (collection path = '$db_path')"
+        return 1
+    fi
+
+    cat "$db_path"
+}
+
+_PATHS_SAVE_DB () {
+    local collection_name
+    local db_path
+
+    collection_name=$1
+    #collection_name=${_PATHS_STATE_DB[collection_name]}
+    db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
+    
+    declare -p path_db > "$db_path"
+
+    if [[ ! -v NO_WARN && ! -e $db_path ]]; then
+        echo >&2 "Warning: collection '$collection_name' created in libary (db_path = '$db_path')"
+    fi
+}
 
 _PATHS_KEY_COMPLETIONS() {
     # completion words come from the keys of the associative array stored in the file below
@@ -333,7 +411,7 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -s|--subscribe-to-collection)
-            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            COMPREPLY=($(compgen -o default -- "$partial_key"))
             return 0
             ;;
         -r|--rename-collection)
@@ -345,7 +423,7 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -i|--inherit-collection)
-            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            COMPREPLY=($(compgen -o default -- "$partial_key"))
             return 0
             ;;
     esac
@@ -359,7 +437,7 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -s|--subscribe-to-collection)
-            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            COMPREPLY=($(compgen -o default -- "$partial_key"))
             return 0
             ;;
         -u|--update-subscription)
@@ -375,11 +453,11 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -m|--merge-collections)
-            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            COMPREPLY=($(compgen -o default -- "$partial_key"))
             return 0
             ;;
         -i|--inherit-collection)
-            COMPREPLY=($(compgen -o defaultbash -- "$partial_key"))
+            COMPREPLY=($(compgen -o default -- "$partial_key"))
             return 0
             ;;
         -M|--merge-mode)
@@ -421,76 +499,6 @@ _PATHS_ML_COMPLETION () {
     esac
 }
 complete -F _PATHS_ML_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_ML]}
-
-# init path database if it does not exist
-if [[ ! -d $_PATHS_LIBRARY ]]; then
-    mkdir -p "$_PATHS_LIBRARY" || echo >&2 "Error: please make sure that the directory '$_PATHS_LIBRARY' exists or can be created"
-fi
-
-# running in a subshell to protect potential user variables "state_db" and "path_db"
-(
-    if [[ ! -e $_PATHS_STATE_FILE ]]; then
-        declare -gA state_db
-        state_db=(
-            [default_bookmark_name]=$_PATHS_DEFAULT_BM_NAME
-            [default_bookmark_value]=$HOME
-            [current_collection]=default
-        )
-        declare -p state_db > "$_PATHS_STATE_FILE"
-
-        collection_name=default
-        db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
-
-        if [[ ! -e $db_path ]]; then
-            declare -gA path_db
-            declare -p path_db > "$db_path"
-        fi
-    fi
-)
-unset _PATHS_DEFAULT_BM_NAME
-
-_PATHS_LOAD_STATE () {
-    if [[ ! -e $_PATHS_STATE_FILE ]]; then
-        echo >&2 "Error: path state file does not exist (state file = '$_PATHS_STATE_FILE')"
-        return 1
-    fi
-    cat "$_PATHS_STATE_FILE"
-}
-
-_PATHS_SAVE_STATE () {
-    declare -p state_db > "$_PATHS_STATE_FILE"
-}
-
-_PATHS_LOAD_DB () {
-    local collection_name
-    local db_path
-
-    collection_name=$1
-    #collection_name=${_PATHS_STATE_DB[collection_name]}
-    db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
-
-    if [[ ! -e $db_path ]]; then
-        echo >&2 "Error: cannot load collection '$collection_name', it does not exist in library (collection path = '$db_path')"
-        return 1
-    fi
-
-    cat "$db_path"
-}
-
-_PATHS_SAVE_DB () {
-    local collection_name
-    local db_path
-
-    collection_name=$1
-    #collection_name=${_PATHS_STATE_DB[collection_name]}
-    db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
-    
-    declare -p path_db > "$db_path"
-
-    if [[ ! -v NO_WARN && ! -e $db_path ]]; then
-        echo >&2 "Warning: collection '$collection_name' created in libary (db_path = '$db_path')"
-    fi
-}
 
 
 # save path
@@ -988,6 +996,8 @@ _PATHS_PP () {
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
         -c|--collection)
             shift
+            unset path_db
+            local path_db
             eval "$(_PATHS_LOAD_DB "$1")"
             OVERRIDE_COLLECTION=$1
             ;;
@@ -1113,7 +1123,7 @@ _PATHS_PP () {
     local collection
     collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
     [[ -n $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
-    printf -- "Current Collection: %s\n\n" "$collection"
+    printf -- "Current collection: %s\n\n" "$collection"
 
     local tab_char
     printf -v tab_char "\t"
@@ -1186,7 +1196,7 @@ _PATHS_FORMAT_BM () {
     local collection
 
     collection=$_PATHS_CURRENT_COLLECTION
-    [[ -z $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
+    [[ -n $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
 
     local path_db
     local state_db
@@ -1201,7 +1211,7 @@ _PATHS_FORMAT_BM () {
     fi
     case "$value" in
         /*)
-            printf -- "%s" "$value"
+            printf -- "%s" "${value//\/\//\/}"
             ;;
         f*)
             # execute function and return value
@@ -1253,7 +1263,7 @@ _PATHS_FORMAT_BM () {
                 if $resolve; then
                     if result="$(_PATHS_PP -R "$bookmark_name")"; then
                         local resolved_path="$result/$relative_path"
-                        printf -- "%s" "$resolved_path"
+                        printf -- "%s" "${resolved_path//\/\//\/}"
                         return 0
                     else
                         echo "Error: recursive lookup of bookmark '$bookmark_name' failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
@@ -1337,9 +1347,9 @@ _PATHS_ML () {
             shift ${argc[arg]}
             ;;
         -M|--merge-mode)
-            argc[M]=2
+            argc[M]=1
             merge_mode=$2
-            (( $# >= ${argc[M]} + 1 )) || { echo >&2 "Error: \'$1\' requires ${argc[M]} arg(s)"; return 1; }
+            (( $# >= ${argc[M]} + 1 )) || { echo >&2 "Error: '$1' requires ${argc[M]} arg(s)"; return 1; }
             case "$merge_mode" in
                 [alr]|ask|use-left|use-right) ;;
                 *)
@@ -1371,9 +1381,11 @@ _PATHS_ML () {
             shift ${argc[arg]}
             ;;
         -S|--shell-scope)
+            management_modes+=S
             current_scope=shell
             ;;
         -R|--reset-scope)
+            management_modes+=R
             current_scope=system
             reset_scope=true
             ;;
@@ -1467,10 +1479,10 @@ _PATHS_ML () {
         management_modes=${management_modes:1}
         case $current_mode in
             l)
-                printf -- "Library:            %s\n" "$(realpath -e "$_PATHS_LIBRARY" || echo "<error: realpath failed for \$_PATHS_LIBRARY>")"
                 local collection
                 collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
-                printf -- "Current collection: %s\n" "$collection"
+                printf -- "Library:             %s\n" "$(realpath -e "$_PATHS_LIBRARY" || echo "<error: realpath failed for \$_PATHS_LIBRARY>")"
+                printf -- "Current collection:  %s\n" "$collection"
                 echo
                 {
                     printf -- "Collection Name\tCollection Path\n"  # table headers
@@ -1501,7 +1513,7 @@ _PATHS_ML () {
                     local ans
                     local ask=true
                     while $ask; do
-                        read -p "rm: would you like to delete collection '$name'? (y/n) " ans
+                        read -p "delete: would you like to delete collection '$name'? (y/n) " ans
                         ask=true
                         case "${ans,,}" in
                             y|yes)
@@ -1515,11 +1527,26 @@ _PATHS_ML () {
                         esac
                     done
                     $ans || { management_args=("${management_args[@]:drop_count}"); continue; }
-                else
-                    echo >&2 "Warning: collection '$name' will be deleted"
                 fi
 
-                rm -f "$path"
+                local p
+                local error=false
+                for p in "$path" "$path.src"; do
+                    [[ -e $p ]] || continue
+
+                    if ! rm -f "$p"; then
+                        echo >&2 "Error: failed to remove '$p'"
+                        error=true
+                    else
+                        if [[ $p == *.src ]]; then
+                            echo "removed subscription source link for collection '$name'"
+                        else
+                            echo "removed collection '$name'"
+                        fi
+                    fi
+                done
+
+                $error && return 1
 
                 if [[ $name == "${state_db[current_collection]}" ]]; then
                     echo >&2 "Warning: collection '$name' was the current collection; please set a new current collection"
@@ -1581,6 +1608,10 @@ _PATHS_ML () {
 
                 $cmd -f "$orig_path" "$new_path"
 
+                if [[ -e $orig_path.src ]]; then
+                    $cmd -f "$orig_path.src" "$new_path.src"
+                fi
+
                 if [[ $cmd == mv && $orig_name == "${state_db[current_collection]}" ]]; then
                     state_db[current_collection]=$new_name
                     _PATHS_SAVE_STATE
@@ -1598,7 +1629,11 @@ _PATHS_ML () {
                     echo >&2 "Error: cannot create collection '$name' because it already exists ($path)"
                     return 1
                 fi
-                NO_WARN=1 _PATHS_SAVE_DB "$name"
+
+                if ! NO_WARN=1 _PATHS_SAVE_DB "$name" && echo "created collection '$name'"; then
+                    echo >&2 "Error: failed to create new collection '$name'"
+                    return 1
+                fi
                 ;;
             m)
                 local left_coll
@@ -1635,15 +1670,16 @@ _PATHS_ML () {
 
                 $error && return 1
 
-                declare -A left_db
-                declare -A right_db
+                #declare -A left_db
+                #declare -A right_db
                 declare -A new_db
+                local definition
 
-                _PATHS_LOAD_DB $left_coll
-                left_db=("${path_db[@]}")
+                definition=$(_PATHS_LOAD_DB "$left_coll")
+                eval "declare -A left_db=${definition#*=}"
 
-                _PATHS_LOAD_DB $right_coll
-                right_db=("${path_db[@]}")
+                definition=$(_PATHS_LOAD_DB "$right_coll")
+                eval "declare -A right_db=${definition#*=}"
 
                 # input validated, so this matching is safe
                 case $merge_mode in
@@ -1651,13 +1687,13 @@ _PATHS_ML () {
                         local bm
                         declare -A bm_ocurrences
                         for bm in "${!left_db[@]}" "${!right_db[@]}"; do
-                            (( $bm_ocurrences[$bm]++ ))
+                            bm_ocurrences[$bm]+=a
                         done
 
                         local left_bm
                         local right_bm
                         for bm in "${!bm_ocurrences[@]}"; do
-                            if (( ${bm_ocurrences[$bm]} == 2 )); then
+                            if (( ${#bm_ocurrences[$bm]} == 2 )); then
                                 # ask
                                 local ans
                                 local ask=true
@@ -1686,15 +1722,37 @@ _PATHS_ML () {
                         done
                         ;;
                     *l*)
-                        right_db+=("${left_db[@]}")
-                        new_db=("${right_db[@]}")
+                        for key in "${!left_db[@]}"; do
+                            right_db[$key]=${left_db[$key]}
+                        done
+
+                        for key in "${!right_db[@]}"; do
+                            new_db[$key]=${right_db[$key]}
+                        done
                         ;;
                     *r*)
-                        left_db+=("${right_db[@]}")
-                        new_db=("${left_db[@]}")
+                        for key in "${!right_db[@]}"; do
+                            left_db[$key]=${right_db[$key]}
+                        done
+
+                        for key in "${!left_db[@]}"; do
+                            new_db[$key]=${left_db[$key]}
+                        done
                         ;;
                 esac
-                path_db=("${new_db[@]}")
+
+                unset path_db
+                declare -A path_db
+                for key in "${!new_db[@]}"; do
+                    path_db[$key]=${new_db[$key]}
+                done
+
+                if NO_WARN=1 _PATHS_SAVE_DB "$new_coll"; then
+                    echo "saved merged collection as '$new_coll'"
+                else
+                    echo >&2 "Error: failed to create new collection '$new_coll'"
+                    return 1
+                fi
                 ;;
             i|s|u)
                 local name
@@ -1729,7 +1787,7 @@ _PATHS_ML () {
 
                 local dst_path
                 dst_path=$_PATHS_LIBRARY/$name.collection.sh
-                if [[ -e $dst_path ]]; then
+                if [[ $current_mode != u && -e $dst_path ]]; then
                     echo >&2 "Error: collection '$name' already exists ($dst_path)"
                     return 1
                 fi
@@ -1752,22 +1810,33 @@ _PATHS_ML () {
                         fi
                         ;;
                 esac
-                echo "inherit: added collection '$inheritance_name' at '$path' as '$name'"
+                local prefix
+                case $current_mode in
+                    i) echo "inherit: added collection '$name'" ;;
+                    s) echo "subscribe: added collection '$name'" ;;
+                    u) echo "update: updated collection '$name'" ;;
+                esac
                 ;;
         esac
 
         management_args=("${management_args[@]:drop_count}")
     done
+
+    $reset_scope && unset _PATHS_CURRENT_COLLECTION
+
     # if positional argument specified, switch to that collection, if possible; doing this last
     if [[ ! -z $current_collection && $current_collection != "${state_db[current_collection]}" ]]; then
         local path
         path=$_PATHS_LIBRARY/$current_collection.collection.sh
         if [[ ! -e $path ]]; then
-            echo >&2 "Error: cannot set current collection to '$current_collection'; collection does not exist (path = '$path')"
+            if [[ -L $path ]]; then
+                echo >&2 "Error: cannot set current collection to '$current_collection'; link to original is broken"
+            else
+                echo >&2 "Error: cannot set current collection to '$current_collection'; collection does not exist (path = '$path')"
+            fi
+
             return 1
         fi
-
-        $reset_scope && unset _PATHS_CURRENT_COLLECTION
 
         case $current_scope in
             system) 
