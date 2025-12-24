@@ -22,7 +22,7 @@
 
 # BEGIN USER CUSTOMIZATIONS ############################################################################################
 export _PATHS_LIBRARY="$HOME/.path_bookmarks"
-export _PATHS_DEFAULT_BM_NAME=_default
+_PATHS_DEFAULT_BM_NAME=_default
 declare -A _PATHS_FUNC_ALIASES=([_PATHS_GP]="gp" [_PATHS_SP]="sp" [_PATHS_DP]="dp" [_PATHS_PP]="pp" [_PATHS_ML]="ml")
 # END USER CUSTOMIZATIONS ##############################################################################################
 
@@ -229,7 +229,7 @@ _PATHS_GP_COMPLETION () {
     declare -a long_opts=(--help --bookmark --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
-    case "${COMP_WORDS[COMP_CWORD-1]}" in
+    ((COMP_CWORD >= 1)) && case "${COMP_WORDS[COMP_CWORD-1]}" in
         -b|--bookmark)
             _PATHS_KEY_COMPLETIONS
             return 0
@@ -249,27 +249,31 @@ _PATHS_GP_COMPLETION () {
             COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
             return 0
             ;;
-    esac
-
-    # figure out how many positional args we have
-    local positional_arg_num=-1
-    local arg
-    local opt
-    declare -a opts_with_arg=(-p --path -b --bookmark -c --collection)
-    for arg in "${COMP_WORDS[@]}"; do
-        [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
-        for opt in "${opts_with_arg[@]}"; do
-            [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
-        done
-    done
-
-    # complete the positional arguments
-    case $positional_arg_num in
-        1)
-            # offer existing bookmarks as options for the case of reassigning a bookmark
+        *)
             _PATHS_KEY_COMPLETIONS
+            return 0
             ;;
     esac
+
+    ## figure out how many positional args we have
+    #local positional_arg_num=-1
+    #local arg
+    #local opt
+    #declare -a opts_with_arg=(-p --path -b --bookmark -c --collection)
+    #for arg in "${COMP_WORDS[@]}"; do
+    #    [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
+    #    for opt in "${opts_with_arg[@]}"; do
+    #        [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
+    #    done
+    #done
+
+    ## complete the positional arguments
+    #case $positional_arg_num in
+    #    1)
+    #        # offer existing bookmarks as options for the case of reassigning a bookmark
+    #        _PATHS_KEY_COMPLETIONS
+    #        ;;
+    #esac
 }
 complete -F _PATHS_GP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_GP]}
 
@@ -278,7 +282,7 @@ _PATHS_DP_COMPLETION () {
     declare -a long_opts=(--help --clean-absolute --clean-functions --clean-relative --no-confirm --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
-    case "${COMP_WORDS[COMP_CWORD-1]}" in
+    ((COMP_CWORD >= 1)) && case "${COMP_WORDS[COMP_CWORD-1]}" in
         -c|--collection)
             _PATHS_COLLECTION_COMPLETIONS
             return 0
@@ -304,7 +308,7 @@ _PATHS_PP_COMPLETION () {
     declare -a long_opts=(--help --exact-resolve --resolve --function-body --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
-    case "${COMP_WORDS[COMP_CWORD-1]}" in
+    ((COMP_CWORD >= 1)) && case "${COMP_WORDS[COMP_CWORD-1]}" in
         -c|--collection)
             _PATHS_COLLECTION_COMPLETIONS
             return 0
@@ -330,7 +334,7 @@ _PATHS_SP_COMPLETION () {
     declare -a long_opts=(--bookmark --function --path --relative-to --no-confirm --help --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
-    case "${COMP_WORDS[COMP_CWORD-1]}" in
+    ((COMP_CWORD >= 1)) && case "${COMP_WORDS[COMP_CWORD-1]}" in
         -c|--collection)
             _PATHS_COLLECTION_COMPLETIONS
             return 0
@@ -392,6 +396,7 @@ complete -F _PATHS_SP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
 compopt -o nospace ${_PATHS_FUNC_ALIASES[_PATHS_SP]}
 
 _PATHS_ML_COMPLETION () {
+    #set -x
     declare -a short_opts=(-l -r -d -c -C -m -M -s -i -u -S -R -n -h)
     declare -a long_opts=(--list-collections --rename-collection --delete-collection --create-collection
         --copy-collection --merge-collections --merge-mode --subscribe-to-collection --inherit-collection
@@ -399,19 +404,23 @@ _PATHS_ML_COMPLETION () {
 
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
-    case "${COMP_WORDS[COMP_CWORD-3]}" in
+    ((COMP_CWORD >= 3)) && case "${COMP_WORDS[COMP_CWORD-3]}" in
         -m|--merge-collections)
             _PATHS_COLLECTION_COMPLETIONS
             return 0
             ;;
     esac
-    case "${COMP_WORDS[COMP_CWORD-2]}" in
+    ((COMP_CWORD >= 2)) && case "${COMP_WORDS[COMP_CWORD-2]}" in
         -C|--copy-collection)
             _PATHS_COLLECTION_COMPLETIONS
             return 0
             ;;
         -s|--subscribe-to-collection)
+            #echo ------0
+            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
+            #set +x
+            #echo ------0
             return 0
             ;;
         -r|--rename-collection)
@@ -423,11 +432,15 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -i|--inherit-collection)
+            #echo ------1
+            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
+            #set +x
+            #echo ------1
             return 0
             ;;
     esac
-    case "${COMP_WORDS[COMP_CWORD-1]}" in
+    ((COMP_CWORD >= 1)) && case "${COMP_WORDS[COMP_CWORD-1]}" in
         -C|--copy-collection)
             _PATHS_COLLECTION_COMPLETIONS
             return 0
@@ -437,7 +450,11 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -s|--subscribe-to-collection)
+            #echo ------2
+            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
+            #set +x
+            #echo ------2
             return 0
             ;;
         -u|--update-subscription)
@@ -453,50 +470,76 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -m|--merge-collections)
+            #echo ------3
+            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
+            #set +x
+            #echo ------3
             return 0
             ;;
         -i|--inherit-collection)
+            #echo ------4
+            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
+            #set +x
+            #echo ------4
             return 0
             ;;
         -M|--merge-mode)
             declare -a modes
             modes=(a ask r use-right l use-left)
+            #echo ------5
+            #set -x
             COMPREPLY=($(compgen -W "${modes[*]}" -- "$partial_key"))
+            #set +x
+            #echo ------5
             return 0
     esac
 
     case "${COMP_WORDS[COMP_CWORD]}" in 
         --*)
+            #echo ------6
+            #set -x
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
+            #set +x
+            #echo ------6
             return 0
             ;;
         -*)
+            #echo ------7
+            #set -x
             COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
+            #set +x
+            #echo ------7
+            return 0
+            ;;
+        *)
+            _PATHS_COLLECTION_COMPLETIONS
             return 0
             ;;
     esac
 
-    # figure out how many positional args we have
-    local positional_arg_num=-1
-    local arg
-    local opt
-    declare -a opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
-    for arg in "${COMP_WORDS[@]}"; do
-        [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
-        for opt in "${opts_with_arg[@]}"; do
-            [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
-        done
-    done
+    ## figure out how many positional args we have
+    #local positional_arg_num=-1
+    #local arg
+    #local opt
+    #declare -a opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
+    #for arg in "${COMP_WORDS[@]}"; do
+    #    [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
+    #    for opt in "${opts_with_arg[@]}"; do
+    #        [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
+    #    done
+    #done
 
-    # complete the positional arguments
-    case $positional_arg_num in
-        1)
-            # offer existing bookmarks as options for the case of reassigning a bookmark
-            _PATHS_COLLECTION_COMPLETIONS
-            ;;
-    esac
+    ## complete the positional arguments
+    #case $positional_arg_num in
+    #    1)
+    #        # offer existing bookmarks as options for the case of reassigning a bookmark
+    #        _PATHS_COLLECTION_COMPLETIONS
+    #        ;;
+    #esac
+
+    #set +x
 }
 complete -F _PATHS_ML_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_ML]}
 
@@ -1438,6 +1481,14 @@ _PATHS_ML () {
             echo "    inherited     these are symlinked to another user's collection and live-update"
             echo "    subscribed    these are copied at creation into the user's library and can be updated at manual intervals"
             echo
+            echo "Interpreting the 'Meta' column:"
+            echo "    This column displays attributes of a collection. These are listed below:"
+            echo "        (C)     this collection is the current collection"
+            echo "        (I)     this collection is inherited from an external source"
+            echo "        (S)     this collection is a subscription to an external source"
+            echo "        (-age)  this is time elapsed since the subscription was last updated, hence the '-' to indicate out-of-date potential;"
+            echo "                    h = hours, d = days, m = months, y = years"
+            echo
             echo "*"
             echo "The core functionality of this script relies on sourcing *.collection.sh files, which are BASH scripts. If you"
             echo "do not trust the other users on your system, do not use the subscription features. It is worth noting that while"
@@ -1479,22 +1530,60 @@ _PATHS_ML () {
         management_modes=${management_modes:1}
         case $current_mode in
             l)
-                local collection
-                collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
+                local current_collection
+                current_collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
                 printf -- "Library:             %s\n" "$(realpath -e "$_PATHS_LIBRARY" || echo "<error: realpath failed for \$_PATHS_LIBRARY>")"
-                printf -- "Current collection:  %s\n" "$collection"
+                printf -- "Current collection:  %s\n" "$current_collection"
                 echo
                 {
-                    printf -- "Collection Name\tCollection Path\n"  # table headers
-                    printf -- "---------------\t---------------\n"
+                    printf -- "Collection Name\tMeta\tCollection Path\n"  # table headers
+                    printf -- "---------------\t----\t---------------\n"
+
+                    local meta
+                    local now mtime age hour day month year
+                    now=$(date +%s)
+                    hour=3600
+                    day=86400
+                    month=$(( 30 * day ))
+                    year=$(( 365 * day ))
+
                     local collection
                     local name
                     for collection in "$_PATHS_LIBRARY"/*.collection.sh; do
                         name=${collection##*/}
                         name=${name%.collection.sh}
-                        printf -- "%s\t%s\n" "$name" "$(realpath -e "$collection" || echo "$collection <error: realpath failed; broken link?>")"; 
+                        
+                        meta=
+                        if [[ $name == "$current_collection" ]]; then
+                            meta+="(C)"
+                        fi
+
+                        if [[ -L $collection ]]; then
+                            meta+="(I)"
+                        elif [[ -e $collection.src ]]; then
+                            meta+="(S)(-"
+
+                            mtime=$(stat -c %Y "$collection.src")
+                            age=$(( now - mtime ))
+
+                            if (( age < day )); then
+                                meta+="$(( age / hour ))h"
+                            elif (( age < month )); then
+                                meta+="$(( age / day ))d"
+                            elif (( age < year )); then
+                                meta+="$(( age / month ))m"
+                            else
+                                meta+="$(( age / year ))y"
+                            fi
+                            meta+=")"
+                        else
+                            meta=
+                        fi
+
+                        #meta=${meta//)(/) (}
+                        printf -- "%s\t%s\t%s\n" "$name" "$meta" "$(realpath -e "$collection" || echo "$collection <error: realpath failed; broken link?>")"; 
                     done
-                } | { column -t -s "$tab_char" -W2 -L 2>/dev/null || column -t -s "$tab_char"; }
+                } | { column -t -s "$tab_char" -W3 -L 2>/dev/null || column -t -s "$tab_char"; }
                 ;;
             d)
                 local name
