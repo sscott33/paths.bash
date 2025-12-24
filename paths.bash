@@ -775,7 +775,7 @@ _PATHS_GP () {
     eval "$(_PATHS_LOAD_STATE)"
     eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
     local path
-    local bookmark_name
+    declare -a bookmark_names
     local OVERRIDE_COLLECTION
 
     declare -a positional_opts
@@ -787,14 +787,18 @@ _PATHS_GP () {
             ;;
         -b|--bookmark)
             shift
-            bookmark_name="$1"
+            bookmark_names+=("$1")
             ;;
         -h|--help)
             # do help
             echo "Usage:"
-            echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-c|--collection <collection>] [-h|--help] [<bookmark_name>]"
+            echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-c|--collection <collection>] [-h|--help] [<bookmark_name> ...]"
             echo
-            echo "    This function changes the working directory to the location specified by the given bookmark."
+            echo "    This function changes the working directory to the location specified by the given bookmark. You can specify"
+            echo "    more than one bookmark and the function will cd to them in the order specified. This is useful if you have a"
+            echo "    final destination specified by a relative bookmark that depends on a function-based bookmark that only works"
+            echo "    at a certain location, which is specified by an absolute bookmark. This condenses chained calls into a single"
+            echo "    call."
             echo
             echo "    Key assumptions:"
             echo "        - if no bookmark name is specified, the default bookmark is used"
@@ -829,41 +833,44 @@ _PATHS_GP () {
     fi
 
     # set the bookmark name if unset
-    if [[ -z "$bookmark_name" ]]; then
+    if [[ ${#bookmark_names[@]} -eq 0 ]]; then
         if [[ -n "$1" ]]; then
-            bookmark_name="$1"
+            bookmark_names+=("$@")
         else
-            bookmark_name="${state_db[default_bookmark_name]}"
+            bookmark_names+=("${state_db[default_bookmark_name]}")
         fi
     fi
 
-    # sanity check the name
-    path=${path_db[$bookmark_name]}
-    if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
-        path=${state_db[default_bookmark_value]}
-    elif [[ -z "$path" ]]; then
-        echo "Error: nonexistent bookmark '$bookmark_name" >&2
-        return 1
-    else
-        if ! path="$(_PATHS_PP -R "$bookmark_name")"; then
-            local retval=$?
-            echo >&2 "Error: path resolution failed; see previous errors"
-            return $retval
-        fi
-    fi
-
-    # make sure path exists
-    if [[ -d "$path" ]]; then
-        cd "$path" && echo "working directory is now '$(pwd)'"
-        return 0
-    else
-        if [[ -e $path ]]; then
-            echo >&2 "Error: destination is not a directory; destination: '$path'"
+    declare -p bookmark_names
+    local path bookmark_name
+    for bookmark_name in "${bookmark_names[@]}"; do
+        # sanity check the name
+        path=${path_db[$bookmark_name]}
+        if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
+            path=${state_db[default_bookmark_value]}
+        elif [[ -z "$path" ]]; then
+            echo "Error: nonexistent bookmark '$bookmark_names" >&2
+            return 1
         else
-            echo "Error: destination does not exist; destination: '$path'" >&2
+            if ! path="$(_PATHS_PP -R "$bookmark_name")"; then
+                local retval=$?
+                echo >&2 "Error: path resolution failed; see previous errors"
+                return $retval
+            fi
         fi
-        return 1
-    fi
+
+        # make sure path exists
+        if [[ -d "$path" ]]; then
+            cd "$path" && echo "working directory is now '$(pwd)'"
+        else
+            if [[ -e $path ]]; then
+                echo >&2 "Error: destination is not a directory; destination: '$path'"
+            else
+                echo "Error: destination does not exist; destination: '$path'" >&2
+            fi
+            return 1
+        fi
+    done
 }
 
 # delete path
