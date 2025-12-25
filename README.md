@@ -137,7 +137,7 @@ You need not concern yourself with collections if you prefer your bookmarks to b
 
 ### Importing and exporting collections
 
-There is no built-in feature to import or export collections, but you can easily do this by copying the desired `*.collection.sh` files to a new location or library. These files
+There is no built-in feature to import or export collections, but you can easily do this by copying the desired `*.collection.sh` files to a new location or library. These files are named according to the collection they store and can be copied and inserted into a library without risk, so long as the default bookmark name is the same between the two relevant libraries.
 
 ### Utilizing functions
 
