@@ -104,12 +104,12 @@ _PATHS_SAVE_DB () {
     collection_name=$1
     #collection_name=${_PATHS_STATE_DB[collection_name]}
     db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
-    
-    declare -p path_db > "$db_path"
 
     if [[ ! -v NO_WARN && ! -e $db_path ]]; then
         echo >&2 "Warning: collection '$collection_name' created in libary (db_path = '$db_path')"
     fi
+    
+    declare -p path_db > "$db_path"
 }
 
 _PATHS_KEY_COMPLETIONS() {
@@ -278,7 +278,7 @@ _PATHS_GP_COMPLETION () {
 complete -F _PATHS_GP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_GP]}
 
 _PATHS_DP_COMPLETION () {
-    declare -a short_opts=(-h -ca -cf -cr -n -c)
+    declare -a short_opts=(-h -C -n -c)
     declare -a long_opts=(--help --clean-absolute --clean-functions --clean-relative --no-confirm --collection)
     local partial_key="${COMP_WORDS[COMP_CWORD]}"
 
@@ -894,15 +894,15 @@ _PATHS_DP () {
             eval "$(_PATHS_LOAD_DB "$1")"
             OVERRIDE_COLLECTION=$1
             ;;
-        -ca|--clean-absolute)
+        -C|--clean-absolute)
             clean_absolute=true
             ;;
-        -cf|--clean-functions)
+        --clean-functions)
             clean_functions=true
             # this is a no-op for now; not sure how or if to handle
             echo "Info: '$1' not yet implemented"
             ;;
-        -cr|--clean-relative)
+        --clean-relative)
             clean_relative=true
             echo "Info: '$1' not yet implemented"
             # this is a no-op for now; complicated to handle and must be done after absolute path cleaning
@@ -928,9 +928,9 @@ _PATHS_DP () {
             echo
             echo "    Options:"
             echo "        -c|--collection <arg>     name of the collection to use for the duration of this command"
-            echo "        -ca|--clean-absolute      remove absolute bookmarks that do not resolve to an existing path"
-            echo "        -cf|--clean-functions     NOT YET IMPLEMENTED: clean up function-based bookarks"
-            echo "        -cr|--clean-relative      NOT YET IMPLEMENTED: clean up relative bookmarks that fail to resolve to an existing path"
+            echo "        -C|--clean-absolute       remove absolute bookmarks that do not resolve to an existing path"
+            echo "        --clean-functions         NOT YET IMPLEMENTED: clean up function-based bookarks"
+            echo "        --clean-relative          NOT YET IMPLEMENTED: clean up relative bookmarks that fail to resolve to an existing path"
             echo "        -n|--no-confirm           do not ask for confirmation before removal"
             echo "        -h|--help                 print this help"
             echo
@@ -1495,6 +1495,7 @@ _PATHS_ML () {
             echo "        (S)     this collection is a subscription to an external source"
             echo "        (-age)  this is time elapsed since the subscription was last updated, hence the '-' to indicate out-of-date potential;"
             echo "                    h = hours, d = days, m = months, y = years"
+            echo "        (#bm)   this indicates the count of bookmarks in the collection"
             echo
             echo "*"
             echo "The core functionality of this script relies on sourcing *.collection.sh files, which are BASH scripts. If you"
@@ -1547,6 +1548,7 @@ _PATHS_ML () {
                     printf -- "---------------\t----\t---------------\n"
 
                     local meta
+                    local count
                     local now mtime age hour day month year
                     now=$(date +%s)
                     hour=3600
@@ -1583,9 +1585,11 @@ _PATHS_ML () {
                                 meta+="$(( age / year ))y"
                             fi
                             meta+=")"
-                        else
-                            meta=
                         fi
+
+                        eval "$(_PATHS_LOAD_DB "$name")"
+                        count=${#path_db[@]}
+                        meta+="(${count}bm)"
 
                         #meta=${meta//)(/) (}
                         printf -- "%s\t%s\t%s\n" "$name" "$meta" "$(realpath -e "$collection" || echo "$collection <error: realpath failed; broken link?>")"; 
