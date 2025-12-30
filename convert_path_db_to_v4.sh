@@ -15,7 +15,7 @@ migrated_coll_name=$3
 
 error=false
 for s in old_script new_script; do
-    [[ -e $s ]] || { error=true; echo >&2 "Error: script '$s' not found"; }
+    [[ -e ${!s} ]] || { error=true; echo >&2 "Error: script '${!s}' not found"; }
 done
 
 $error && exit 1
