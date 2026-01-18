@@ -108,7 +108,7 @@ _PATHS_SAVE_DB () {
     if [[ ! -v NO_WARN && ! -e $db_path ]]; then
         echo >&2 "Warning: collection '$collection_name' created in libary (db_path = '$db_path')"
     fi
-    
+
     declare -p path_db > "$db_path"
 }
 
@@ -548,9 +548,6 @@ complete -F _PATHS_ML_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_ML]}
 _PATHS_SP () {
     local path_db
     local state_db
-    # source database
-    eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
     local path
     local bookmark_name
     local rel_bookmark_name
@@ -558,14 +555,14 @@ _PATHS_SP () {
     local func_name
     local path_specified=true
     local no_confirm=false
-    local OVERRIDE_COLLECTION
+    local current_collection
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
         -c|--collection)
             shift
             eval "$(_PATHS_LOAD_DB "$1")"
-            OVERRIDE_COLLECTION=$1
+            current_collection=$1
             ;;
         -p|--path)  # accepts one immediate argument, which is the path on disk the bookmark will point to
             shift
@@ -619,7 +616,7 @@ _PATHS_SP () {
             echo "Related aliases:"
             alias | while read -r line; do [[ $line == *$FUNCNAME* ]] && echo "    $line"; done
             echo
-  
+
             return 0
             ;;
         [^-]*)  # pos1: bookmark name, pos2: path on disk
@@ -643,6 +640,15 @@ _PATHS_SP () {
         echo "Error: recieved $# positional arguments; expecting 2 or less" >&2
         return 1
     fi
+
+    # use the correct collection
+    eval "$(_PATHS_LOAD_STATE)"
+    if [[ -z $current_collection ]]; then
+        current_collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
+    fi
+
+    # load the collection
+    eval "$(_PATHS_LOAD_DB "$current_collection")"
 
     # set the bookmark name if unset
     if [[ -z "$bookmark_name" ]]; then
@@ -771,19 +777,16 @@ _PATHS_SP () {
 _PATHS_GP () {
     local path_db
     local state_db
-    # source database
-    eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
     local path
     declare -a bookmark_names
-    local OVERRIDE_COLLECTION
+    local current_collection
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
         -c|--collection)
             shift
             eval "$(_PATHS_LOAD_DB "$1")"
-            OVERRIDE_COLLECTION=$1
+            current_collection=$1
             ;;
         -b|--bookmark)
             shift
@@ -832,6 +835,15 @@ _PATHS_GP () {
         set -- "${positional_opts[@]}" "$@"
     fi
 
+    # use the correct collection
+    eval "$(_PATHS_LOAD_STATE)"
+    if [[ -z $current_collection ]]; then
+        current_collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
+    fi
+
+    # load the collection
+    eval "$(_PATHS_LOAD_DB "$current_collection")"
+
     # set the bookmark name if unset
     if [[ ${#bookmark_names[@]} -eq 0 ]]; then
         if [[ -n "$1" ]]; then
@@ -877,22 +889,19 @@ _PATHS_GP () {
 _PATHS_DP () {
     local path_db
     local state_db
-    # source database
-    eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
 
     local clean_absolute=false
     local clean_functions=false
     local clean_relative=false
     local confirm=true
-    local OVERRIDE_COLLECTION
+    local current_collection
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
         -c|--collection)
             shift
             eval "$(_PATHS_LOAD_DB "$1")"
-            OVERRIDE_COLLECTION=$1
+            current_collection=$1
             ;;
         -C|--clean-absolute)
             clean_absolute=true
@@ -957,6 +966,15 @@ _PATHS_DP () {
     if [[ ${#positional_opts[@]} -gt 0 ]]; then
         set -- "${positional_opts[@]}" "$@"
     fi
+
+    # use the correct collection
+    eval "$(_PATHS_LOAD_STATE)"
+    if [[ -z $current_collection ]]; then
+        current_collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
+    fi
+
+    # load the collection
+    eval "$(_PATHS_LOAD_DB "$current_collection")"
 
     if $clean_absolute; then
         # foreach bookmark, resolve and if result is nonexistent
@@ -1025,7 +1043,7 @@ _PATHS_DP () {
         unset "path_db[$bookmark]"
     done
 
-    _PATHS_SAVE_DB "${state_db[current_collection]}"
+    _PATHS_SAVE_DB "$current_collection"
     return $retval
 }
 
@@ -1243,15 +1261,17 @@ _PATHS_FORMAT_BM () {
     local bookmark_name="$1"
     local resolve="$2"
     local return_function_body="$3"
-    local collection
 
-    collection=$_PATHS_CURRENT_COLLECTION
-    [[ -n $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
+    # don't need these lines because the stateful variables can be inherited from the parent func
+    #local collection
 
-    local path_db
-    local state_db
-    eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${collection:-${state_db[current_collection]}}")"
+    #collection=$_PATHS_CURRENT_COLLECTION
+    #[[ -n $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
+
+    #local path_db
+    #local state_db
+    #eval "$(_PATHS_LOAD_STATE)"
+    #eval "$(_PATHS_LOAD_DB "${collection:-${state_db[current_collection]}}")"
 
     local value
     if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
@@ -1299,7 +1319,7 @@ _PATHS_FORMAT_BM () {
                 value="${value%(*}"
                 value="${value::20}"
 
-                echo "Error: parsing of bookmark '${value::20}' (truncated) failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+                echo "Error: parsing of relative bookmark '$bookmark_name' failed; please manually check the value (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
                 return 1
             fi
             ;;
@@ -1325,7 +1345,7 @@ _PATHS_FORMAT_BM () {
                 return 0
 
             else
-                echo "Error: parsing of bookmark '${value::20}' (truncated) failed (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
+                echo "Error: parsing of relative bookmark '$bookmark_name' failed; please manually check the value (subshell depth: $BASH_SUBSHELL, function stack: ${FUNCNAME[*]})" >&2
                 return 1
             fi
 
@@ -1561,7 +1581,7 @@ _PATHS_ML () {
                     for collection in "$_PATHS_LIBRARY"/*.collection.sh; do
                         name=${collection##*/}
                         name=${name%.collection.sh}
-                        
+
                         meta=
                         if [[ $name == "$current_collection" ]]; then
                             meta+="(C)"
@@ -1671,7 +1691,7 @@ _PATHS_ML () {
 
                 orig_path=$_PATHS_LIBRARY/$orig_name.collection.sh
                 new_path=$_PATHS_LIBRARY/$new_name.collection.sh
-                
+
                 if [[ ! -e $orig_path ]]; then
                     echo >&2 "Error: collection '$orig_name' does not exist"
                     return 1
@@ -1752,7 +1772,7 @@ _PATHS_ML () {
                 new_coll_path=$_PATHS_LIBRARY/$new_coll.collection.sh
                 left_coll_path=$_PATHS_LIBRARY/$left_coll.collection.sh
                 right_coll_path=$_PATHS_LIBRARY/$right_coll.collection.sh
-                
+
                 local error=false
                 if [[ -e $new_coll_path ]]; then
                     echo >&2 "Error: collection '$new_coll' exists"
