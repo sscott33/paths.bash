@@ -1,6 +1,6 @@
 # paths.bash
 
-paths.bash is a directory bookmarking and navigation system designed for systems running Bash with GNU Coreutils. It features five functions for accessing and managing the library. Bookmarks are organized into collections. This utility is designed for people who live in the shell, often jump between deep directory trees, and want something that addresses deficiencies in cache-based cd alternatives. All functions have tab-completion niceties.
+`paths.bash` is a directory bookmarking and navigation system designed for systems running Bash with GNU Coreutils. It features five functions for accessing and managing the library. Bookmarks are organized into collections. This utility is designed for people who live in the shell, often jump between deep directory trees, and want something that addresses deficiencies in cache-based cd alternatives. All functions have tab-completion niceties.
 
 You will get the most out of paths.bash if you need to traverse a complicated directory structure on a regular basis.
 
@@ -26,7 +26,7 @@ The conversion script will create or overwrite a collection named by the user in
 
 ## Usage
 
-The following are the current aliases to the four Bash functions you use to interact with the bookmarking system and their accompanying mnemonics. Feel free to modify them for your convenience or to avoid collisions with your environment (see *Advanced configuration* for instructions). This can be done because as the internal code uses the real names of the functions. By default, all functions except for `ml` operate on the active collection and have the ability to temporarily operate on another collection. A short description of each function can be found in the subsequent subsections. Immediately below are the default aliases and their mnemonics:
+The following are the current aliases to the Bash functions you use to interact with the bookmarking system and their accompanying mnemonics. Feel free to modify them for your convenience or to avoid collisions with your environment (see *Advanced configuration* for instructions). This can be done because as the internal code uses the real names of the functions. By default, all functions except for `ml` operate on the active collection and have the ability to temporarily operate on another collection. A short description of each function can be found in the subsequent subsections. Immediately below are the default aliases and their mnemonics:
 * dp — delete path(s)
 * gp — go-to path
 * pp — print path(s)
@@ -39,19 +39,23 @@ This function allows you to delete one or more bookmarks from a collection. Unle
 
 ### gp (\_PATHS_GP)
 
-This function allows the user go change their current directory to the location specified by a bookmark. It accepts chaining of bookmarks for situations where first cd-ing to the path specified by one bookmark is required for another bookmark to resolve correctly. If you are new to this utility, this is a bit of a nonsensical situation to encounter, but if you create any function-based bookmarks (see *Advanced usage*), you may find this feature to be useful.
+This function allows the user change their current directory to the location specified by a bookmark. It accepts chaining of bookmarks for situations where first cd-ing to the path specified by one bookmark is required for another bookmark to resolve correctly. If you are new to this utility, this is a bit of a nonsensical situation to encounter, but if you create any function-based bookmarks (see *Advanced usage*), you may find this feature to be useful.
+
+Note that if no bookmark name is provided, the default bookmark will be used.
 
 ### pp (\_PATHS_PP)
 
 This function prints out the bookmarks in a collection. It sorts by bookmark name, can filter bookmark names using Bash regular expressions, and can display bookmarks in a variety of representations. The notation for unresolved bookmarks that are not an absolute path is as follows:
 * `[bookmark_name]/<path>` indicates a bookmark relative to the bookmark specified by `bookmark_name`
-* `$'...` indicates a truncated function definition (you will see more of the function definition if you have a wider terminal width)
+* `$'...` indicates a truncated function definition (limited to 20 characters)
 
-You can opt to have all displayed bookmarks fully resolved to their path on disk. You can also use this function on a single bookmark to retrieve its path on disk or, if it is a function-based bookmark, you may optionally retrieve its underlying Bash function.
+You can opt to have all displayed bookmarks fully resolved to their path on disk. You can also use this function on a single bookmark to retrieve its fully resolved path, if it is a function-based bookmark, you may optionally retrieve its underlying Bash function.
 
 ### sp (\_PATHS_SP)
 
 This function is used to create new bookmarks and add them to a collection. It can only create one at a time. It supports reduced positional arguments to intuitively save the working directory as the bookmark specified by the first argument. This syntax is how most users tend to create their bookmarks.
+
+Note that if no bookmark name is provided, the default bookmark will be used.
 
 ### ml (\_PATHS_ML)
 
@@ -63,11 +67,11 @@ The introduction of library management also allows for some interesting features
 
 #### Inheriting a collection
 
-Inheriting a collection means that you have a symlink to the original collection and will receive updates to it as soon as they are made. This also means that, should you have group write permission to the inherited collection, you, and other users in the same group, can collaborate on the same collection to share useful paths. There is, however, no protection against race conditions, so it is best to communicate with others when updating the bookmarks in that collection.
+Inheriting a collection means that you have a symlink to the original collection and will receive updates to it as soon as they are made. This also means that, should you have group write permission to the inherited collection, you, and other users in the same group, can collaborate on the same collection to share useful paths. There is, however, no mutex, so it is best to communicate with others when updating the bookmarks in that collection.
 
 #### Subscribing to a collection
 
-When you subscribe to a collection, you have a local copy of it that does not update until manually specified. This is useful if you are concerned about the owner changing things under you. When shown in the list of collections, its *Meta* column will specify how outdated your copy is. Note that this is a simple bit of modification time analysis of a symlink pointing to the original collection. Whether you are missing out on any updates is not taken into account. Note that since you have your own local copy, you may modify it as desired, but those modifications will be lost when you decide to update the subscription.
+When you subscribe to a collection, you have a local copy of it that does not update until manually specified. This is useful if you are concerned about the owner changing things under you. When shown in the list of collections, its *Meta* column will specify how outdated your copy is. Note that this is based on the modification time of the symlink pointing to the original collection. Whether you are missing out on any updates is not taken into account. Note that since you have your own local copy, you may modify it as desired, but those modifications will be lost when you decide to update the subscription.
 
 ## Advanced configuration
 
@@ -75,9 +79,9 @@ Immediately following the license text at the top of paths.bash, you will find a
 
 ### The default bookmark
 
-The default bookmark can be changed, but never deleted. It is not tied to any collection. The idea behind it is to store a temporary bookmark that can be easily used at a later time or in another instance of your shell. Since bookmarked paths are immediately stored on disk, you can access the default bookmark (and any other existing bookmarks) in another shell/terminal. This is useful if you want another terminal open to the same directory and the cd command would be tedious to write. Using the default bookmark is explained in the help text for sp and gp.
+The default bookmark can be changed, but never deleted. It is not tied to any collection. The idea behind it is to store a temporary bookmark that can be easily used at a later time or in another instance of your shell. Since bookmarked paths are immediately stored on disk, you can subsequently access the default bookmark (and any other bookmarks) in another shell. This is useful if you want another terminal open to the same directory and the cd command would be tedious to write. Using the default bookmark is explained in the help text for sp and gp.
 
-You can rename the bookmark used to reference the default bookmark by changing the value of `_PATHS_DEFAULT_BM_NAME` in the script. Be careful that you do not shadow-delete the name of an existing bookmark in any of your collections in doing so. If there is a collision between the default bookmark name and that of one stored a collection, the default bookmark will take precedence.
+You can rename the bookmark used to reference the default bookmark by changing the value of `_PATHS_DEFAULT_BM_NAME` in the script. Be careful that you do not shadow-delete the name of an existing bookmark in any of your collections. If there is a collision between the default bookmark name and that of one stored in a collection, the default bookmark will take precedence and no warning will be printed.
 
 ### Path Library
 
@@ -85,9 +89,9 @@ You can configure the location and name of the directory storing your bookmarks 
 
 ### Aliases
 
-The real names of the functions are illustrated in the help text for each function. The user should utilize a convenient set of aliases to interact with these functions. The reason for this is to maintain a naming scheme that is unlikely to need refactoring while allowing the user to easily update these in case of collision or a difference of personal preferences.
+The real names of the functions are illustrated in the help text for each function. The user should utilize a convenient set of aliases to interact with these functions. This layer of indirection aims to maintain a naming scheme that is easily updatable and unlikely to need widespread refactoring. For example, there are internal uses of `_PATHS_PP`, so by utilizing the non-aliased name in scripts and functions, the functionality can be almost guaranteed.
 
-If you want to change an alias, update the appropriate "value" in the `_PATHS_FUNC_ALIASES` associative array mappings.
+If you want to change an alias, update the appropriate "value" in the `_PATHS_FUNC_ALIASES` associative array mapping.
 
 ### Environment
 
@@ -99,7 +103,7 @@ There are two environment variables used by this script:
 
 The two-character function names used to interface with the path database storing your bookmarks are aliases to the actual functions.
 
-Note that the environment is briefly polluted with an associative array called `_PATHS_FUNC_ALIASES` to set up the aliasing. It is unset by the time paths.bash is fully sourced.
+Note that the environment is briefly polluted with an associative array called `_PATHS_FUNC_ALIASES` to set up the aliasing and a variable called `_PATHS_DEFAULT_BM_NAME` to configure the name of the default bookmark. These are unset by the time paths.bash is fully sourced.
 
 ## Advanced usage
 
@@ -142,12 +146,15 @@ There is no built-in feature to import or export collections, but you can easily
 ### Utilizing functions
 
 Creating a function-based bookmark is rather simple:
-1. Define your function
-2. Create the bookmark: `sp -f <function name> <bookmark name>`
+1. Define your function in your current shell
+2. Create the bookmark using the following command in the same shell:
+```
+sp -f <function name> <bookmark name>
+```
 
 paths.bash will store the function definition internally, so the function need not exist in the user's environment to be utilized after storage, nor would the parent scope definition be used if it did. In fact, utilizing a function-based bookmark should not pollute the user's environment as it is defined and called within a subshell during bookmark resolution.
 
-Below is an example function I use regularly to anchor my navigation within a "workspace" (a programmatically-initialized directory containing several git repos and somewhat deep directory hierarchies) by finding the workspace's WORKSPACE file (which resides at its root). Note that it returns in an error state if it does not find what it is looking for. path.bash will check this return code and use it to determine if something went wrong during the function call. Any function utilized by paths.bash as a bookmark should return a real file path that is (preferably) a fully resolved path relative to root (/).
+Below is an example function I use regularly to anchor my navigation within a "workspace" (a programmatically-initialized directory containing several git repos and somewhat deep directory hierarchies) by finding the workspace's WORKSPACE file (which resides at its root). Note that it returns in an error state if it does not find what it is looking for. `paths.bash` will check this return code and use it to determine if something went wrong during the function call. Any function utilized by `paths.bash` as a bookmark should return a real file path that is (preferably) a fully resolved path relative to root (/).
 
 
 ```
@@ -179,4 +186,4 @@ At time of writing, I do not have a formal way of testing this, so please keep a
 
 ## License
 
-See the associated LICENSE file in the repo. This licence is also duplicated inside paths.bash.
+See the associated LICENSE file in the repo. The licence is also duplicated inside paths.bash.
