@@ -152,7 +152,7 @@ Creating a function-based bookmark is rather simple:
 sp -f <function name> <bookmark name>
 ```
 
-paths.bash will store the function definition internally, so the function need not exist in the user's environment to be utilized after storage, nor would the parent scope definition be used if it did. In fact, utilizing a function-based bookmark should not pollute the user's environment as it is defined and called within a subshell during bookmark resolution.
+`paths.bash` will store the function definition internally, so the function need not exist in the user's environment to be utilized after storage, nor would the parent scope definition be used if it did. In fact, utilizing a function-based bookmark should not pollute the user's environment as it is defined and called within a subshell during bookmark resolution.
 
 Below is an example function I use regularly to anchor my navigation within a "workspace" (a programmatically-initialized directory containing several git repos and somewhat deep directory hierarchies) by finding the workspace's WORKSPACE file (which resides at its root). Note that it returns in an error state if it does not find what it is looking for. `paths.bash` will check this return code and use it to determine if something went wrong during the function call. Any function utilized by `paths.bash` as a bookmark should return a real file path that is (preferably) a fully resolved path relative to root (/).
 
@@ -161,11 +161,10 @@ Below is an example function I use regularly to anchor my navigation within a "w
 find_ws () {
 (
     until [[ -e WORKSPACE ]]; do
-        [[ "$(pwd)" == "/" ]] && return 1;
+        [[ $(pwd) == / ]] && return 1;
         \cd ..
     done
     pwd
-    return 0
 )
 }
 ```
@@ -173,10 +172,10 @@ find_ws () {
 This function is then stored into a bookmark which refers to the local workspace (that the shell's working directory is within):
 
 ```
-sp -f find_ws lws
+sp -f find_ws local_ws
 ```
 
-The 'lws' bookmark can then be used as the root bookmark for several relative bookmarks that point to useful areas within a workspace. These relative bookmarks would behave dynamically and can be used to navigate whatever workspace the user is currently within.
+The 'local_ws' bookmark can then be used as the root bookmark for several relative bookmarks that point to useful areas within a workspace. These relative bookmarks would behave dynamically and can be used to navigate whatever workspace the user is currently within.
 
 It is also noteworthy that `$bookmark_name` is a variable accessible to the function during its call. This is the name of the bookmark it is stored in. This is useful if you want to store the same function in different bookmarks and have it modify its behavior accordingly, such as using that bookmark name as a component of a path it constructs.
 
