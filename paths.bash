@@ -42,7 +42,7 @@ fi
 # running in a subshell to protect potential user variables "state_db" and "path_db"
 (
     if [[ ! -e $_PATHS_STATE_FILE ]]; then
-        declare -gA state_db
+        declare -A state_db=()
         state_db=(
             [default_bookmark_name]=$_PATHS_DEFAULT_BM_NAME
             [default_bookmark_value]=$HOME
@@ -55,7 +55,7 @@ fi
         db_path=$_PATHS_LIBRARY/$collection_name.collection.sh
 
         if [[ ! -e $db_path ]]; then
-            declare -gA path_db
+            declare -A path_db=()
             declare -p path_db > "$db_path"
         fi
     fi
@@ -254,26 +254,6 @@ _PATHS_GP_COMPLETION () {
             return 0
             ;;
     esac
-
-    ## figure out how many positional args we have
-    #local positional_arg_num=-1
-    #local arg
-    #local opt
-    #declare -a opts_with_arg=(-p --path -b --bookmark -c --collection)
-    #for arg in "${COMP_WORDS[@]}"; do
-    #    [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
-    #    for opt in "${opts_with_arg[@]}"; do
-    #        [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
-    #    done
-    #done
-
-    ## complete the positional arguments
-    #case $positional_arg_num in
-    #    1)
-    #        # offer existing bookmarks as options for the case of reassigning a bookmark
-    #        _PATHS_KEY_COMPLETIONS
-    #        ;;
-    #esac
 }
 complete -F _PATHS_GP_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_GP]}
 
@@ -416,11 +396,7 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -s|--subscribe-to-collection)
-            #echo ------0
-            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
-            #set +x
-            #echo ------0
             return 0
             ;;
         -r|--rename-collection)
@@ -432,11 +408,7 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -i|--inherit-collection)
-            #echo ------1
-            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
-            #set +x
-            #echo ------1
             return 0
             ;;
     esac
@@ -450,11 +422,7 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -s|--subscribe-to-collection)
-            #echo ------2
-            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
-            #set +x
-            #echo ------2
             return 0
             ;;
         -u|--update-subscription)
@@ -470,47 +438,27 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
         -m|--merge-collections)
-            #echo ------3
-            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
-            #set +x
-            #echo ------3
             return 0
             ;;
         -i|--inherit-collection)
-            #echo ------4
-            #set -x
             COMPREPLY=($(compgen -o default -- "$partial_key"))
-            #set +x
-            #echo ------4
             return 0
             ;;
         -M|--merge-mode)
             declare -a modes
             modes=(a ask r use-right l use-left)
-            #echo ------5
-            #set -x
             COMPREPLY=($(compgen -W "${modes[*]}" -- "$partial_key"))
-            #set +x
-            #echo ------5
             return 0
     esac
 
     case "${COMP_WORDS[COMP_CWORD]}" in 
         --*)
-            #echo ------6
-            #set -x
             COMPREPLY=($(compgen -W "${long_opts[*]}" -- "$partial_key"))
-            #set +x
-            #echo ------6
             return 0
             ;;
         -*)
-            #echo ------7
-            #set -x
             COMPREPLY=($(compgen -W "${short_opts[*]} ${long_opts[*]}" -- "$partial_key"))
-            #set +x
-            #echo ------7
             return 0
             ;;
         *)
@@ -518,28 +466,6 @@ _PATHS_ML_COMPLETION () {
             return 0
             ;;
     esac
-
-    ## figure out how many positional args we have
-    #local positional_arg_num=-1
-    #local arg
-    #local opt
-    #declare -a opts_with_arg=(-p --path -b --bookmark -f --function -r --relative-to)
-    #for arg in "${COMP_WORDS[@]}"; do
-    #    [[ "$arg" =~ ^- ]] || ((positional_arg_num++))
-    #    for opt in "${opts_with_arg[@]}"; do
-    #        [[ "$arg" == "$opt" ]] && { ((positional_arg_num--)); break; }
-    #    done
-    #done
-
-    ## complete the positional arguments
-    #case $positional_arg_num in
-    #    1)
-    #        # offer existing bookmarks as options for the case of reassigning a bookmark
-    #        _PATHS_COLLECTION_COMPLETIONS
-    #        ;;
-    #esac
-
-    #set +x
 }
 complete -F _PATHS_ML_COMPLETION ${_PATHS_FUNC_ALIASES[_PATHS_ML]}
 
@@ -1158,33 +1084,6 @@ _PATHS_PP () {
 
     # exact_resolve not specified
 
-    # for each positional argument
-
-    # are we resolving values?
-
-    # main body
-
-    # need to determine what to print
-        # all search values are positional
-        # search values can be exact or regex
-
-    # need to decide how to print each thing we found
-        # resolve results?
-            # -r general resolution
-            # -R expect one exact bookmark name and will resolve its value; error otherwise
-
-        # separate match results with "---\n"
-        # sort each match's results based on bookmark name
-        # match result groupings are in the order of searches supplied
-        # if one search term is supplied, no sep or header needed
-            # else: each result set headed by "searching for <term>:\n"
-
-        # print key-value pairs using tab-separation piped to column always -- assumption is regex search unless -R given
-            # _PATHS_PP flag to opt for output truncation at terminal width or perform smarter wrapping (look into -W)
-            # column is outdated on several actively used systems, so need to fall back to usage without "-L" or "-W" options
-
-        # functions will only not be truncated when requested by the user
-
     $return_function_body && echo Warning: ignoring option to return full function body: please resolve a single bookmark to use this feature >&2
     return_function_body=false
 
@@ -1217,7 +1116,6 @@ _PATHS_PP () {
 
     ## one argument plus exact match -> don't need special formatting or bookmark name in the output
 
-
     local tab_char
     printf -v tab_char "\t"
     # handle multiple expressions plus regex
@@ -1233,9 +1131,6 @@ _PATHS_PP () {
                 local print_return=true
                 local key
                 for key in "${!path_db[@]}" "${state_db[default_bookmark_name]}"; do
-                    #[[ "$key" == "$arg" ]] && exact=" (exact)" || exact=""
-                    #[[ "$key" != "${state_db[default_bookmark_name]}" && "$key" =~ $arg ]] && printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body)"
-
                     local print_match=false
                     if [[ "$key" == "$arg" ]]; then
                         print_match=true
@@ -1249,7 +1144,6 @@ _PATHS_PP () {
                         print_return=false
                         printf -- "\t%s%s\t%s\n" "$key" "$exact" "$(_PATHS_FORMAT_BM "$key" $resolve $return_function_body || echo "<error>")"
                     fi
-
                 done
                 $print_return && echo
             } | sort  # sort each match group
@@ -1262,16 +1156,7 @@ _PATHS_FORMAT_BM () {
     local resolve="$2"
     local return_function_body="$3"
 
-    # don't need these lines because the stateful variables can be inherited from the parent func
-    #local collection
-
-    #collection=$_PATHS_CURRENT_COLLECTION
-    #[[ -n $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
-
-    #local path_db
-    #local state_db
-    #eval "$(_PATHS_LOAD_STATE)"
-    #eval "$(_PATHS_LOAD_DB "${collection:-${state_db[current_collection]}}")"
+    # don't need to initialize the stateful variables because they are inherited from the parent func
 
     local value
     if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
@@ -1611,7 +1496,6 @@ _PATHS_ML () {
                         count=${#path_db[@]}
                         meta+="(${count}bm)"
 
-                        #meta=${meta//)(/) (}
                         printf -- "%s\t%s\t%s\n" "$name" "$meta" "$(realpath -e "$collection" || echo "$collection <error: realpath failed; broken link?>")"; 
                     done
                 } | { column -t -s "$tab_char" -W3 -L 2>/dev/null || column -t -s "$tab_char"; }
@@ -1790,8 +1674,6 @@ _PATHS_ML () {
 
                 $error && return 1
 
-                #declare -A left_db
-                #declare -A right_db
                 declare -A new_db
                 local definition
 
@@ -1930,11 +1812,10 @@ _PATHS_ML () {
                         fi
                         ;;
                 esac
-                local prefix
                 case $current_mode in
-                    i) echo "inherit: added collection '$name'" ;;
-                    s) echo "subscribe: added collection '$name'" ;;
-                    u) echo "update: updated collection '$name'" ;;
+                    i) echo "inherited collection '$name'" ;;
+                    s) echo "subscribed to collection '$name'" ;;
+                    u) echo "updated collection '$name'" ;;
                 esac
                 ;;
         esac
