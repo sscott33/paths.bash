@@ -646,7 +646,7 @@ _PATHS_SP () {
         local name_len=${#func_name}
 
         path_db[$bookmark_name]=f${name_len}:$func_name$func_def
-        _PATHS_SAVE_DB "${state_db[current_collection]}"
+        _PATHS_SAVE_DB "$current_collection"
 
         echo "Saved function '$func_name' as '$bookmark_name'"
         return 0
@@ -669,7 +669,7 @@ _PATHS_SP () {
         resolved_path="r$name_len:$rel_bookmark_name$resolved_path"
 
         path_db[$bookmark_name]=$resolved_path
-        _PATHS_SAVE_DB "${state_db[current_collection]}"
+        _PATHS_SAVE_DB "$current_collection"
 
         echo "Saved '$path' as '$bookmark_name' relative to '$rel_bookmark_name'"
         return 0
@@ -691,7 +691,7 @@ _PATHS_SP () {
         echo "Saved path '$path' as the default bookmark"
     else
         path_db[$bookmark_name]=$resolved_path
-        _PATHS_SAVE_DB "${state_db[current_collection]}"
+        _PATHS_SAVE_DB "$current_collection"
         echo "Saved path '$path' as '$bookmark_name'"
     fi
 
@@ -779,7 +779,6 @@ _PATHS_GP () {
         fi
     fi
 
-    declare -p bookmark_names
     local path bookmark_name
     for bookmark_name in "${bookmark_names[@]}"; do
         # sanity check the name
