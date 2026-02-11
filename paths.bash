@@ -487,7 +487,6 @@ _PATHS_SP () {
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
         -c|--collection)
             shift
-            eval "$(_PATHS_LOAD_DB "$1")"
             current_collection=$1
             ;;
         -p|--path)  # accepts one immediate argument, which is the path on disk the bookmark will point to
@@ -711,7 +710,6 @@ _PATHS_GP () {
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
         -c|--collection)
             shift
-            eval "$(_PATHS_LOAD_DB "$1")"
             current_collection=$1
             ;;
         -b|--bookmark)
@@ -767,7 +765,6 @@ _PATHS_GP () {
         current_collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
     fi
 
-    # load the collection
     eval "$(_PATHS_LOAD_DB "$current_collection")"
 
     # set the bookmark name if unset
@@ -786,10 +783,10 @@ _PATHS_GP () {
         if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
             path=${state_db[default_bookmark_value]}
         elif [[ -z "$path" ]]; then
-            echo "Error: nonexistent bookmark '$bookmark_names" >&2
+            echo "Error: nonexistent bookmark '$bookmark_names'" >&2
             return 1
         else
-            if ! path="$(_PATHS_PP -R "$bookmark_name")"; then
+            if ! path="$(_PATHS_PP -c "$current_collection" -R "$bookmark_name")"; then
                 local retval=$?
                 echo >&2 "Error: path resolution failed; see previous errors"
                 return $retval
@@ -976,9 +973,6 @@ _PATHS_DP () {
 _PATHS_PP () {
     local path_db
     local state_db
-    # source database
-    eval "$(_PATHS_LOAD_STATE)"
-    eval "$(_PATHS_LOAD_DB "${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}")"
 
     local resolve=false
     local exact_resolve=false
@@ -989,10 +983,7 @@ _PATHS_PP () {
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
         -c|--collection)
             shift
-            unset path_db
-            local path_db
-            eval "$(_PATHS_LOAD_DB "$1")"
-            OVERRIDE_COLLECTION=$1
+            current_collection=$1
             ;;
         -R|--exact-resolve)
             exact_resolve=true
@@ -1049,6 +1040,15 @@ _PATHS_PP () {
         set -- "${positional_opts[@]}" "$@"
     fi
 
+    # use the correct collection
+    eval "$(_PATHS_LOAD_STATE)"
+    if [[ -z $current_collection ]]; then
+        current_collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
+    fi
+
+    # load the collection
+    eval "$(_PATHS_LOAD_DB "$current_collection")"
+
     if $exact_resolve; then
         if [[ ${#@} -ne 1 ]]; then
             echo "Error: expected exactly one positional argument (subshell depth: $BASH_SUBSHELL, function stack: "${FUNCNAME[*]}")" >&2
@@ -1086,10 +1086,10 @@ _PATHS_PP () {
     $return_function_body && echo Warning: ignoring option to return full function body: please resolve a single bookmark to use this feature >&2
     return_function_body=false
 
-    local collection
-    collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
-    [[ -n $OVERRIDE_COLLECTION ]] && collection="$OVERRIDE_COLLECTION"
-    printf -- "Current collection: %s\n\n" "$collection"
+    local current_collection
+    current_collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
+    [[ -n $OVERRIDE_COLLECTION ]] && current_collection="$OVERRIDE_COLLECTION"
+    printf -- "Current collection: %s\n\n" "$current_collection"
 
     local tab_char
     printf -v tab_char "\t"
@@ -1156,6 +1156,9 @@ _PATHS_FORMAT_BM () {
     local return_function_body="$3"
 
     # don't need to initialize the stateful variables because they are inherited from the parent func
+    # - current_collection
+    # - state_db
+    # - path_db
 
     local value
     if [[ $bookmark_name == "${state_db[default_bookmark_name]}" ]]; then
@@ -1215,7 +1218,7 @@ _PATHS_FORMAT_BM () {
                 local relative_path="${BASH_REMATCH[2]:$len}"
 
                 if $resolve; then
-                    if result="$(_PATHS_PP -R "$bookmark_name")"; then
+                    if result="$(_PATHS_PP -c "$current_collection" -R "$bookmark_name")"; then
                         local resolved_path="$result/$relative_path"
                         printf -- "%s" "${resolved_path//\/\//\/}"
                         return 0
@@ -1628,6 +1631,7 @@ _PATHS_ML () {
 
                 local path
                 path=$_PATHS_LIBRARY/$name.collection.sh
+                declare -A path_db=()
                 if [[ -e $path ]]; then
                     echo >&2 "Error: cannot create collection '$name' because it already exists ($path)"
                     return 1
