@@ -51,11 +51,30 @@ This function prints out the bookmarks in a collection. It sorts by bookmark nam
 
 You can opt to have all displayed bookmarks fully resolved to their path on disk. You can also use this function on a single bookmark to retrieve its fully resolved path, if it is a function-based bookmark, you may optionally retrieve its underlying Bash function.
 
+#### List modes
+
+The `-l` flag outputs bookmarks in a compact list format. Supported modes are:
+* `names` (or `n`) — bookmark names only
+* `paths` (or `p`) — paths only
+* `both` (or `b`) — name and path on each line
+
+Combine with `-r` to resolve relative and function-based bookmarks to their actual paths.
+
 ### sp (\_PATHS_SP)
 
 This function is used to create new bookmarks and add them to a collection. It can only create one at a time. It supports reduced positional arguments to intuitively save the working directory as the bookmark specified by the first argument. This syntax is how most users tend to create their bookmarks.
 
 Note that if no bookmark name is provided, the default bookmark will be used.
+
+#### Additional sp operations
+
+Beyond creating bookmarks, `sp` supports renaming, copying, and moving bookmarks between collections:
+
+* `sp --rename <old_name> <new_name>` — rename a bookmark within the current collection
+* `sp --copy <bookmark> --to <collection>` — copy a bookmark to another collection
+* `sp --move <bookmark> --to <collection>` — move a bookmark to another collection
+
+These operations support the `-n` flag to skip confirmation prompts and `-c` to specify a source collection.
 
 ### ml (\_PATHS_ML)
 
@@ -64,6 +83,10 @@ This function is used to manage the library's collections of bookmarks. It suppo
 The introduction of library management also allows for some interesting features on a multi-user system. You can now subscribe to or directly inherit a collection from another user (or simply another location on disk).
 
 **A word of caution:** using these features requires that you trust the other users on your system not do to nasty things. Collections are stored as a shell script containing a command which recreates a collection as a Bash associative array. A collection file could be tampered with and get you to execute anything arbitrarily. Theoretically, this should be no more dangerous that using scripts produced by another user on your system, yet you are much less likely to ever look at the contents of the files storing a collection than any other shell scripts. Use at your own risk.
+
+#### Merging collections
+
+You can merge two collections into a new collection using `ml -m <new_name> <left> <right>`. When both collections contain a bookmark with the same name, you will be prompted to choose which value to keep (`l` for left, `r` for right).
 
 #### Inheriting a collection
 
@@ -179,9 +202,23 @@ The 'local_ws' bookmark can then be used as the root bookmark for several relati
 
 It is also noteworthy that `$bookmark_name` is a variable accessible to the function during its call. This is the name of the bookmark it is stored in. This is useful if you want to store the same function in different bookmarks and have it modify its behavior accordingly, such as using that bookmark name as a component of a path it constructs.
 
-## Miscellaneous info
+## Testing
 
-At time of writing, I do not have a formal way of testing this, so please keep an eye out for bugs and raise an issue if appropriate. I use this tool on a daily basis at my workplace, as do a number of my coworkers, so expect this utility to be maintained and slowly improved over time.
+The project includes a comprehensive test suite using pytest. Tests cover all major functionality including bookmark operations (sp, pp, gp, dp), collection management (ml), and edge cases.
+
+Run tests with:
+
+```bash
+uv run test/test_paths.py
+```
+
+Or using pytest directly:
+
+```bash
+pytest test/test_paths.py -v
+```
+
+The test suite uses temporary directories to isolate tests and verifies both interactive and non-interactive behavior.
 
 ## License
 

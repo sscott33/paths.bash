@@ -1,3 +1,4 @@
 *
 !.gitignore
 !test.sh
+!test_paths.py

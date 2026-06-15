@@ -482,6 +482,9 @@ _PATHS_SP () {
     local path_specified=true
     local no_confirm=false
     local current_collection
+    local rename_old= rename_new=
+    local transfer_bm= transfer_dest= transfer_mode=
+    local path_explicitly_set=false
 
     declare -a positional_opts
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
@@ -492,6 +495,7 @@ _PATHS_SP () {
         -p|--path)  # accepts one immediate argument, which is the path on disk the bookmark will point to
             shift
             path="$1"
+            path_explicitly_set=true
             ;;
         -b|--bookmark)
             shift
@@ -505,6 +509,26 @@ _PATHS_SP () {
             shift
             func_name="$1"
             ;;
+        --rename)
+            shift
+            rename_old="$1"
+            shift
+            rename_new="$1"
+            ;;
+        --copy)
+            shift
+            transfer_bm="$1"
+            transfer_mode=copy
+            ;;
+        --move)
+            shift
+            transfer_bm="$1"
+            transfer_mode=move
+            ;;
+        --to)
+            shift
+            transfer_dest="$1"
+            ;;
         -n|--no-confirm)
             no_confirm=true
             ;;
@@ -512,6 +536,9 @@ _PATHS_SP () {
             echo "Usage:"
             echo "    $FUNCNAME [-b|--bookmark <bookmark_name>] [-f|--function <function_name>] [-p|--path <path>] [-n|--no-confirm]"
             echo "    ${FUNCNAME//?/ } [-r|--relative-to <bookmark>] [-c|--collection <collection>] [-h|--help] [<bookmark_name>] [<path>]"
+            echo "    ${FUNCNAME//?/ } --rename <old_name> <new_name> [-c|--collection <collection>] [-n|--no-confirm]"
+            echo "    ${FUNCNAME//?/ } --copy <bookmark_name> --to <dest_collection> [-c|--collection <src_collection>] [-n|--no-confirm]"
+            echo "    ${FUNCNAME//?/ } --move <bookmark_name> --to <dest_collection> [-c|--collection <src_collection>] [-n|--no-confirm]"
             echo
             echo "    This function creates a new bookmark. It can be used to modify existing bookmarks by overwriting them. Note"
             echo "    that between 0 and 2 positional arguments can be accepted. Both positional arguments can be specified with"
@@ -531,6 +558,10 @@ _PATHS_SP () {
             echo "        -r|--relative-to <arg>    the name of an existing bookmark with which this bookmark will be relative to"
             echo "        -n|--no-confirm           do not ask for confirmation prior to overwriting an existing bookmark"
             echo "        -h|--help                 print this help"
+            echo "        --rename <old> <new>      rename a bookmark within the collection"
+            echo "        --copy <bm> --to <coll>   copy a bookmark to another collection (source unchanged)"
+            echo "        --move <bm> --to <coll>   move a bookmark to another collection (removed from source)"
+            echo "        --to <coll>               destination collection for --copy and --move"
             echo
             echo "Bookmark types:"
             echo "    - absolute path: a fixed path that is fully resolved with realpath"
@@ -566,6 +597,27 @@ _PATHS_SP () {
         return 1
     fi
 
+    if [[ -n $rename_old ]]; then
+        if [[ -n $func_name || -n $rel_bookmark_name || $path_explicitly_set == true || -n $transfer_bm ]]; then
+            echo "Error: --rename cannot be combined with -p, -f, -r, --copy, or --move" >&2
+            return 1
+        fi
+    fi
+    if [[ -n $transfer_bm ]]; then
+        if [[ -z $transfer_dest ]]; then
+            echo "Error: --${transfer_mode} requires --to <collection>" >&2
+            return 1
+        fi
+        if [[ -n $func_name || -n $rel_bookmark_name || $path_explicitly_set == true || -n $rename_old ]]; then
+            echo "Error: --${transfer_mode} cannot be combined with -p, -f, -r, or --rename" >&2
+            return 1
+        fi
+    fi
+    if [[ -n $transfer_dest && -z $transfer_bm ]]; then
+        echo "Error: --to requires --copy or --move" >&2
+        return 1
+    fi
+
     # use the correct collection
     eval "$(_PATHS_LOAD_STATE)"
     if [[ -z $current_collection ]]; then
@@ -574,6 +626,69 @@ _PATHS_SP () {
 
     # load the collection
     eval "$(_PATHS_LOAD_DB "$current_collection")"
+
+    if [[ -n $transfer_bm ]]; then
+        local dest_path=$_PATHS_LIBRARY/$transfer_dest.collection.sh
+        if [[ ! -e $dest_path ]]; then
+            echo "Error: destination collection '$transfer_dest' does not exist" >&2
+            return 1
+        fi
+        local bm_value=${path_db[$transfer_bm]}
+        if [[ -z $bm_value ]]; then
+            echo "Error: bookmark '$transfer_bm' does not exist in collection '$current_collection'" >&2
+            return 1
+        fi
+        eval "$(_PATHS_LOAD_DB "$transfer_dest")"
+        if ! $no_confirm && [[ -n ${path_db[$transfer_bm]} ]]; then
+            local ans ask=true
+            while $ask; do
+                read -p "would you like to overwrite '$transfer_bm' in collection '$transfer_dest'? (y/n) " ans
+                ask=true
+                case "${ans,,}" in
+                    y|yes) ask=false; ans=true ;;
+                    n|no)  ask=false; ans=false ;;
+                esac
+            done
+            $ans || { echo "${transfer_mode} aborted"; return 0; }
+        fi
+        path_db[$transfer_bm]=$bm_value
+        _PATHS_SAVE_DB "$transfer_dest"
+        if [[ $transfer_mode == move ]]; then
+            eval "$(_PATHS_LOAD_DB "$current_collection")"
+            unset "path_db[$transfer_bm]"
+            _PATHS_SAVE_DB "$current_collection"
+        fi
+        echo "${transfer_mode^}d '$transfer_bm' to collection '$transfer_dest'"
+        return 0
+    fi
+
+    if [[ -n $rename_old ]]; then
+        if [[ -z ${path_db[$rename_old]} ]]; then
+            echo "Error: bookmark '$rename_old' does not exist" >&2
+            return 1
+        fi
+        if [[ $rename_old == "${state_db[default_bookmark_name]}" ]]; then
+            echo "Error: cannot rename the default bookmark" >&2
+            return 1
+        fi
+        if ! $no_confirm && [[ -n ${path_db[$rename_new]} ]]; then
+            local ans ask=true
+            while $ask; do
+                read -p "would you like to overwrite existing bookmark '$rename_new'? (y/n) " ans
+                ask=true
+                case "${ans,,}" in
+                    y|yes) ask=false; ans=true ;;
+                    n|no)  ask=false; ans=false ;;
+                esac
+            done
+            $ans || { echo "rename aborted"; return 0; }
+        fi
+        path_db[$rename_new]=${path_db[$rename_old]}
+        unset "path_db[$rename_old]"
+        _PATHS_SAVE_DB "$current_collection"
+        echo "Renamed '$rename_old' to '$rename_new'"
+        return 0
+    fi
 
     # set the bookmark name if unset
     if [[ -z "$bookmark_name" ]]; then
@@ -595,7 +710,7 @@ _PATHS_SP () {
     fi
 
     # sanity checks; need more of these
-    if [[ -n "$func_name" ]] && $path_specified; then
+    if [[ -n "$func_name" ]] && $path_explicitly_set; then
         echo "Error: cannot specify both a path and a function" >&2
         return 1
     fi
@@ -822,7 +937,6 @@ _PATHS_DP () {
     while [[ $# -gt 0 && ! "$1" == "--" ]]; do case "$1" in
         -c|--collection)
             shift
-            eval "$(_PATHS_LOAD_DB "$1")"
             current_collection=$1
             ;;
         -C|--clean-absolute)
@@ -977,6 +1091,7 @@ _PATHS_PP () {
     local resolve=false
     local exact_resolve=false
     local return_function_body=false
+    local list_mode=
     local OVERRIDE_COLLECTION
 
     declare -a positional_opts
@@ -990,6 +1105,13 @@ _PATHS_PP () {
             ;;
         -r|--resolve)
             resolve=true
+            ;;
+        -l|--list-mode)
+            shift
+            case "$1" in
+                n|names|p|paths|b|both) list_mode=$1 ;;
+                *) echo "Error: unrecognized list mode '$1'; valid modes: n/names, p/paths, b/both" >&2; return 1 ;;
+            esac
             ;;
         -f|--function-body)
             return_function_body=true
@@ -1012,6 +1134,10 @@ _PATHS_PP () {
             echo "    Options:"
             echo "        -c|--collection <arg>  name of the collection to use for the duration of this command"
             echo "        -f|--function-body     for function-yielded bookmarks, print the entire function; USE WITH -R or --exact-resolve"
+            echo "        -l|--list-mode <arg>   machine-readable output, one entry per line; arg is one of:"
+            echo "                                   n/names  - bookmark names only"
+            echo "                                   p/paths  - bookmark values only (combine with -r to resolve)"
+            echo "                                   b/both   - name and value tab-separated"
             echo "        -r|--resolve           resolve results in the 'Bookmark Value' column to real paths on disk"
             echo "        -R|--exact-resolve     resolve one bookmark, exactly named, to a path"
             echo "        -h|--help              print this help"
@@ -1049,6 +1175,37 @@ _PATHS_PP () {
     # load the collection
     eval "$(_PATHS_LOAD_DB "$current_collection")"
 
+    if [[ -n $list_mode ]]; then
+        if $exact_resolve || $return_function_body; then
+            echo "Error: --list-mode is incompatible with --exact-resolve and --function-body" >&2
+            return 1
+        fi
+        local key
+        local keys_to_print=()
+        if [[ ${#@} -eq 0 ]]; then
+            keys_to_print+=("${state_db[default_bookmark_name]}")
+            for key in "${!path_db[@]}"; do
+                keys_to_print+=("$key")
+            done
+        else
+            local arg
+            for arg in "$@"; do
+                for key in "${!path_db[@]}"; do
+                    [[ "$key" =~ $arg ]] && keys_to_print+=("$key")
+                done
+                [[ "${state_db[default_bookmark_name]}" == "$arg" ]] && keys_to_print+=("${state_db[default_bookmark_name]}")
+            done
+        fi
+        for key in "${keys_to_print[@]}"; do
+            case $list_mode in
+                n|names) printf -- "%s\n" "$key" ;;
+                p|paths) printf -- "%s\n" "$(_PATHS_FORMAT_BM "$key" $resolve false)" ;;
+                b|both)  printf -- "%s\t%s\n" "$key" "$(_PATHS_FORMAT_BM "$key" $resolve false)" ;;
+            esac
+        done
+        return 0
+    fi
+
     if $exact_resolve; then
         if [[ ${#@} -ne 1 ]]; then
             echo "Error: expected exactly one positional argument (subshell depth: $BASH_SUBSHELL, function stack: "${FUNCNAME[*]}")" >&2
@@ -1069,7 +1226,6 @@ _PATHS_PP () {
             return 1
         else
             # what type of bookmark do we have?
-            local value
 
             if ! value=$(_PATHS_FORMAT_BM "$key" true $return_function_body); then
                 return 1
@@ -1086,9 +1242,6 @@ _PATHS_PP () {
     $return_function_body && echo Warning: ignoring option to return full function body: please resolve a single bookmark to use this feature >&2
     return_function_body=false
 
-    local current_collection
-    current_collection=${_PATHS_CURRENT_COLLECTION:-${state_db[current_collection]}}
-    [[ -n $OVERRIDE_COLLECTION ]] && current_collection="$OVERRIDE_COLLECTION"
     printf -- "Current collection: %s\n\n" "$current_collection"
 
     local tab_char
@@ -1505,7 +1658,7 @@ _PATHS_ML () {
             d)
                 local name
                 name=$management_args
-                drop_count=${argc[u]}
+                drop_count=${argc[d]}
 
                 local path
                 path=$_PATHS_LIBRARY/$name.collection.sh
